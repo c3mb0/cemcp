@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -61,6 +62,34 @@ func TestSafeJoin(t *testing.T) {
 	}
 }
 
+func TestSafeJoinResolveFinal(t *testing.T) {
+	root := t.TempDir()
+	inside := filepath.Join(root, "file.txt")
+	mustWrite(t, inside, []byte("x"), 0o644)
+	if err := makeSymlink(t, inside, filepath.Join(root, "link.txt")); err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			t.Skip("symlinks not supported")
+		}
+		t.Fatalf("symlink: %v", err)
+	}
+	p, err := safeJoinResolveFinal(root, "link.txt")
+	if err != nil || p != inside {
+		t.Fatalf("resolve final inside failed: %v %q", err, p)
+	}
+
+	outside := filepath.Join(root, "..", "escape.txt")
+	mustWrite(t, outside, []byte("o"), 0o644)
+	if err := makeSymlink(t, outside, filepath.Join(root, "badlink")); err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			t.Skip("symlinks not supported")
+		}
+		t.Fatalf("symlink: %v", err)
+	}
+	if _, err := safeJoinResolveFinal(root, "badlink"); err == nil {
+		t.Fatalf("expected error for symlink outside root")
+	}
+}
+
 func TestReadWindow(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "a.txt")
@@ -105,6 +134,13 @@ func TestAtomicWriteAndLock(t *testing.T) {
 	b, err := os.ReadFile(p)
 	if err != nil || string(b) != "a" {
 		t.Fatalf("atomicWrite wrong content: %q err=%v", b, err)
+	}
+	if err := atomicWrite(p, []byte("b"), 0o644); err != nil {
+		t.Fatalf("atomicWrite overwrite failed: %v", err)
+	}
+	b, err = os.ReadFile(p)
+	if err != nil || string(b) != "b" {
+		t.Fatalf("overwrite wrong content: %q err=%v", b, err)
 	}
 
 	rel, err := acquireLock(p, time.Second)
