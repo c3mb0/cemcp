@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -8,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"mime"
 	"net/url"
@@ -413,6 +415,23 @@ type GlobArgs struct {
 
 type GlobResult struct {
 	Matches []string `json:"matches"`
+}
+
+type SearchArgs struct {
+	Pattern    string `json:"pattern"`
+	Path       string `json:"path,omitempty"`
+	Regex      bool   `json:"regex,omitempty"`
+	MaxResults int    `json:"max_results,omitempty"`
+}
+
+type SearchMatch struct {
+	Path string `json:"path"`
+	Line int    `json:"line"`
+	Text string `json:"text"`
+}
+
+type SearchResult struct {
+	Matches []SearchMatch `json:"matches"`
 }
 
 func kindOf(fi os.FileInfo) string {
@@ -901,6 +920,84 @@ func handleList(root string) mcp.StructuredToolHandlerFunc[ListArgs, ListResult]
 	}
 }
 
+func handleSearch(root string) mcp.StructuredToolHandlerFunc[SearchArgs, SearchResult] {
+	return func(ctx context.Context, req mcp.CallToolRequest, args SearchArgs) (SearchResult, error) {
+		start := time.Now()
+		dprintf("-> fs_search path=%q pattern=%q regex=%v max=%d", args.Path, args.Pattern, args.Regex, args.MaxResults)
+		var out SearchResult
+		if args.Pattern == "" {
+			return out, errors.New("pattern required")
+		}
+		max := args.MaxResults
+		if max <= 0 {
+			max = 100
+		}
+		var rx *regexp.Regexp
+		if args.Regex {
+			r, err := regexp.Compile(args.Pattern)
+			if err != nil {
+				dprintf("fs_search error: %v", err)
+				return out, err
+			}
+			rx = r
+		}
+		startPath := root
+		if args.Path != "" {
+			p, err := safeJoin(root, args.Path)
+			if err != nil {
+				dprintf("fs_search error: %v", err)
+				return out, err
+			}
+			startPath = p
+		}
+		if _, err := os.Stat(startPath); err != nil {
+			dprintf("fs_search error: %v", err)
+			return out, err
+		}
+		errStop := errors.New("stop")
+		var matches []SearchMatch
+		_ = filepath.WalkDir(startPath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if d.Type()&os.ModeSymlink != 0 {
+				return nil
+			}
+			f, err := os.Open(path)
+			if err != nil {
+				return nil
+			}
+			defer f.Close()
+			scanner := bufio.NewScanner(f)
+			lineNo := 1
+			for scanner.Scan() {
+				txt := scanner.Text()
+				var ok bool
+				if rx != nil {
+					ok = rx.MatchString(txt)
+				} else {
+					ok = strings.Contains(txt, args.Pattern)
+				}
+				if ok {
+					rel, _ := filepath.Rel(root, path)
+					matches = append(matches, SearchMatch{Path: filepath.ToSlash(rel), Line: lineNo, Text: txt})
+					if len(matches) >= max {
+						return errStop
+					}
+				}
+				lineNo++
+			}
+			return nil
+		})
+		out.Matches = matches
+		dprintf("<- fs_search ok matches=%d dur=%s", len(out.Matches), time.Since(start))
+		return out, nil
+	}
+}
+
 func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args GlobArgs) (GlobResult, error) {
 		start := time.Now()
@@ -1003,6 +1100,17 @@ func main() {
 		mcp.WithOutputSchema[ListResult](),
 	)
 	s.AddTool(listTool, mcp.NewStructuredToolHandler(handleList(root)))
+
+	searchTool := mcp.NewTool(
+		"fs_search",
+		mcp.WithDescription("Search for text within files; regex optional"),
+		mcp.WithString("pattern", mcp.Required()),
+		mcp.WithString("path"),
+		mcp.WithBoolean("regex"),
+		mcp.WithNumber("max_results", mcp.Min(1)),
+		mcp.WithOutputSchema[SearchResult](),
+	)
+	s.AddTool(searchTool, mcp.NewStructuredToolHandler(handleSearch(root)))
 
 	globTool := mcp.NewTool(
 		"fs_glob",

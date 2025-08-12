@@ -9,6 +9,7 @@ A minimal file system server built with [MCP-Go](https://github.com/mark3labs/mc
 - Multiple write strategies: overwrite, no_clobber, append, prepend and replace_range
 - Atomic writes and advisory file locking
 - Directory listing and globbing helpers
+- Content search with substring or regex support
 - Optional debug logging to `./log`
 
 ## Installation
@@ -30,6 +31,12 @@ The server communicates over stdio. See `main.go` for details on the available t
 Pass `--debug` to write verbose logs to `./log`.
 
 ## Testing
+
+Fetch dependencies first:
+
+```bash
+go mod download
+```
 
 Run unit tests:
 
