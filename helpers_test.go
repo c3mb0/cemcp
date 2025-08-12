@@ -178,12 +178,12 @@ func TestKindOf(t *testing.T) {
 
 func TestAcquireLock(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "f")
-	release, err := acquireLock(p, time.Second)
+	release, err := acquireLock(context.Background(), p, time.Second)
 	if err != nil {
 		t.Fatalf("acquireLock failed: %v", err)
 	}
 	defer release()
-	_, err = acquireLock(p, 100*time.Millisecond)
+	_, err = acquireLock(context.Background(), p, 100*time.Millisecond)
 	if err == nil {
 		t.Fatalf("expected lock timeout")
 	}
