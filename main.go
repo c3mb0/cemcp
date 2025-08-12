@@ -1026,13 +1026,6 @@ func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult]
 
 // ---- main ----
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func main() {
 	flag.Parse()
 	initDebug()
