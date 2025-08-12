@@ -285,3 +285,17 @@ func TestRead_MaxBytes_HashAndEncoding(t *testing.T) {
 		t.Fatalf("size mismatch")
 	}
 }
+
+func TestHandleRead_DefaultLimit(t *testing.T) {
+	root := t.TempDir()
+	big := strings.Repeat("a", defaultReadMaxBytes+100)
+	mustWrite(t, filepath.Join(root, "big.txt"), []byte(big), 0o644)
+	rd := handleRead(root)
+	res, err := rd(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "big.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Truncated || len(res.Content) != defaultReadMaxBytes {
+		t.Fatalf("expected truncation to %d bytes: %+v", defaultReadMaxBytes, res)
+	}
+}
