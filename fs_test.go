@@ -211,6 +211,25 @@ func TestHandleWriteStrategies(t *testing.T) {
 	}
 }
 
+func TestHandleWritePrependCreates(t *testing.T) {
+	root := t.TempDir()
+	wr := handleWrite(root)
+	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "new.txt", Encoding: "text", Content: "X", Strategy: strategyPrepend})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "new.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "X" {
+		t.Fatalf("prepend create wrong: %q", string(b))
+	}
+	if !res.Created {
+		t.Fatalf("expected created true")
+	}
+}
+
 func TestHandleReadAndPeek(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "b.txt"), []byte("hello world"), 0o644)
