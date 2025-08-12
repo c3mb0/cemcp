@@ -316,17 +316,11 @@ func atomicWrite(target string, data []byte, mode os.FileMode) error {
 }
 
 // acquireLock creates a best-effort advisory lock using a sibling .lock file.
-// The operation respects context cancellation and evicts lock files older than
-// ten minutes.
-func acquireLock(ctx context.Context, path string, timeout time.Duration) (release func(), err error) {
+// It evicts lock files older than ten minutes.
+func acquireLock(path string, timeout time.Duration) (release func(), err error) {
 	lock := path + ".lock"
 	deadline := time.Now().Add(timeout)
 	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
 		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 		if err == nil {
 			_, _ = fmt.Fprintf(f, "%d\n", os.Getpid())
@@ -345,11 +339,7 @@ func acquireLock(ctx context.Context, path string, timeout time.Duration) (relea
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("lock timeout: %s", path)
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(50 * time.Millisecond):
-		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
@@ -686,7 +676,7 @@ func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResu
 			}
 		}
 
-		release, err := acquireLock(ctx, full, 3*time.Second)
+		release, err := acquireLock(full, 3*time.Second)
 		if err != nil {
 			dprintf("fs_write lock error: %v", err)
 			return res, err
@@ -851,7 +841,7 @@ func handleEdit(root string) mcp.StructuredToolHandlerFunc[EditArgs, EditResult]
 			return res, fmt.Errorf("target not a regular file: %s", args.Path)
 		}
 
-		release, err := acquireLock(ctx, full, 3*time.Second)
+		release, err := acquireLock(full, 3*time.Second)
 		if err != nil {
 			dprintf("fs_edit lock error: %v", err)
 			return res, err
