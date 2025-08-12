@@ -10,7 +10,7 @@ A minimal file system server built with [MCP-Go](https://github.com/mark3labs/mc
 - Atomic writes and advisory file locking
 - Directory listing and globbing helpers
 - Content search with substring or regex support
-- Optional debug logging to `./log`
+- Optional debug logging to a specified file
 - Sane defaults to limit output: 64KB reads, 4KB peeks, 1000 list/glob entries, 100 search matches
 
 ## Installation
@@ -103,7 +103,7 @@ Match files using glob patterns.
 
 ### Debug Logging
 
-Pass `--debug` to write verbose logs to `./log`.
+Pass `--debug /path/to/log` to write verbose logs to the specified file.
 
 ## Testing
 
@@ -113,24 +113,27 @@ Fetch dependencies first:
 go mod download
 ```
 
-Run unit tests:
-
-```bash
-go test ./... -count=1
-```
-
-With the race detector:
+### Run unit tests
 
 ```bash
 go test ./... -race -count=1
 ```
 
-Fuzzers (Go 1.18+):
+### Run fuzzers (Go 1.18+)
 
 ```bash
+# Fuzz path joiners
 GOFLAGS="-tags=go1.18" go test -run=^$ -fuzz=FuzzSafeJoin -fuzztime=30s
+GOFLAGS="-tags=go1.18" go test -run=^$ -fuzz=FuzzSafeJoinResolveFinal -fuzztime=30s
+
+# Fuzz editor
 GOFLAGS="-tags=go1.18" go test -run=^$ -fuzz=FuzzEdit -fuzztime=30s
 ```
+
+### Notes
+- Symlink checks are skipped on Windows when unsupported.
+- The suite exercises: path safety, MIME/text heuristics, windowed reads, modes, atomic writes & lock contention, all write strategies, and handler flows (read/peek/edit/list/glob).
+- Use `-race` regularly; handlers and the lock code are sensitive to concurrent access.
 
 ## License
 
