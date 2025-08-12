@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -277,7 +278,16 @@ func atomicWrite(target string, data []byte, mode os.FileMode) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, target)
+	if err := os.Rename(tmpName, target); err != nil {
+		if runtime.GOOS == "windows" {
+			if removeErr := os.Remove(target); removeErr != nil && !os.IsNotExist(removeErr) {
+				return removeErr
+			}
+			return os.Rename(tmpName, target)
+		}
+		return err
+	}
+	return nil
 }
 
 // naive advisory lock via .lock files (cross-process best-effort)
