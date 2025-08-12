@@ -143,7 +143,7 @@ func TestAtomicWriteAndLock(t *testing.T) {
 		t.Fatalf("overwrite wrong content: %q err=%v", b, err)
 	}
 
-	rel, err := acquireLock(context.Background(), p, time.Second)
+	rel, err := acquireLock(p, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestAtomicWriteAndLock(t *testing.T) {
 	go func() {
 		defer close(done)
 		defer rel() // release the first lock after testing contention
-		_, err := acquireLock(context.Background(), p, 300*time.Millisecond)
+		_, err := acquireLock(p, 300*time.Millisecond)
 		if err == nil {
 			t.Errorf("expected timeout, got nil")
 		}

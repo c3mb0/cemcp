@@ -169,9 +169,7 @@ func TestLockStale(t *testing.T) {
 	_ = os.WriteFile(p+".lock", []byte("123\n"), 0o644)
 	old := time.Now().Add(-11 * time.Minute)
 	_ = os.Chtimes(p+".lock", old, old)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	release, err := acquireLock(ctx, p, time.Second)
+	release, err := acquireLock(p, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
