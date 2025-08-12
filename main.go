@@ -125,6 +125,17 @@ func safeJoin(root, reqPath string) (string, error) {
 	}
 	clean := filepath.Clean(reqPath)
 	rootAbs := mustAbs(root)
+	rootResolved := rootAbs
+	if r2, err := filepath.EvalSymlinks(rootAbs); err == nil {
+		rootResolved = r2
+	}
+	if filepath.IsAbs(clean) {
+		finalAbs := mustAbs(clean)
+		if !strings.HasPrefix(finalAbs+string(os.PathSeparator), rootResolved+string(os.PathSeparator)) && finalAbs != rootResolved {
+			return "", fmt.Errorf("refusing to access outside root: %s", reqPath)
+		}
+		return finalAbs, nil
+	}
 	dir, base := filepath.Split(clean)
 	parent := filepath.Join(rootAbs, dir)
 	parentResolved, err := filepath.EvalSymlinks(parent)
@@ -133,10 +144,6 @@ func safeJoin(root, reqPath string) (string, error) {
 	}
 	final := filepath.Join(parentResolved, base)
 	finalAbs := mustAbs(final)
-	rootResolved := rootAbs
-	if r2, err := filepath.EvalSymlinks(rootAbs); err == nil {
-		rootResolved = r2
-	}
 	if !strings.HasPrefix(finalAbs+string(os.PathSeparator), rootResolved+string(os.PathSeparator)) && finalAbs != rootResolved {
 		return "", fmt.Errorf("refusing to access outside root: %s", reqPath)
 	}
@@ -758,7 +765,7 @@ func handleEdit(root string) mcp.StructuredToolHandlerFunc[EditArgs, EditResult]
 		if args.Regex {
 			limit := args.Count
 			if limit <= 0 {
-				limit = -1
+				limit = 1
 			}
 			out = re.ReplaceAllFunc(b, func(m []byte) []byte {
 				if limit == 0 {
@@ -912,7 +919,12 @@ func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult]
 
 // ---- main ----
 
-func min(a, b int) int { if a < b { return a }; return b }
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 func main() {
 	flag.Parse()
@@ -996,4 +1008,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-
