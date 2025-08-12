@@ -38,6 +38,12 @@ var (
 	debugLog     *log.Logger
 )
 
+// Resource caps to guard against excessive CPU or memory use
+const (
+	maxPeekBytesForSniff = 1 << 20  // 1 MiB for MIME/encoding detection
+	maxHashBytes         = 32 << 20 // 32 MiB hashing cap
+)
+
 func initDebug() {
 	if !*debugFlag {
 		return
@@ -222,6 +228,15 @@ func ensureParent(path string) error {
 	return os.MkdirAll(dir, 0o755)
 }
 
+// trimUnderRoot returns p relative to root without a leading slash.
+// It normalizes separators and handles the case where root is "/".
+func trimUnderRoot(root, p string) string {
+	r := mustAbs(root)
+	r = strings.TrimSuffix(r, string(os.PathSeparator))
+	prefix := r + string(os.PathSeparator)
+	return strings.TrimPrefix(p, prefix)
+}
+
 func readWindow(path string, offset, max int) ([]byte, int64, bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -239,7 +254,7 @@ func readWindow(path string, offset, max int) ([]byte, int64, bool, error) {
 	if int64(offset) > sz {
 		return []byte{}, sz, true, nil
 	}
-	if _, err := f.Seek(int64(offset), io.SeekStart); err != nil { // FIX: stray comma removed
+	if _, err := f.Seek(int64(offset), io.SeekStart); err != nil {
 		return nil, sz, false, err
 	}
 	if max <= 0 {
@@ -300,11 +315,18 @@ func atomicWrite(target string, data []byte, mode os.FileMode) error {
 	return nil
 }
 
-// naive advisory lock via .lock files (cross-process best-effort)
-func acquireLock(path string, timeout time.Duration) (release func(), err error) {
+// acquireLock creates a best-effort advisory lock using a sibling .lock file.
+// The operation respects context cancellation and evicts lock files older than
+// ten minutes.
+func acquireLock(ctx context.Context, path string, timeout time.Duration) (release func(), err error) {
 	lock := path + ".lock"
 	deadline := time.Now().Add(timeout)
 	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 		if err == nil {
 			_, _ = fmt.Fprintf(f, "%d\n", os.Getpid())
@@ -314,10 +336,20 @@ func acquireLock(path string, timeout time.Duration) (release func(), err error)
 		if !errors.Is(err, os.ErrExist) {
 			return nil, err
 		}
+		if info, statErr := os.Stat(lock); statErr == nil {
+			if time.Since(info.ModTime()) > 10*time.Minute {
+				_ = os.Remove(lock)
+				continue
+			}
+		}
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("lock timeout: %s", path)
 		}
-		time.Sleep(50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 }
 
@@ -474,24 +506,45 @@ func handleRead(root string) mcp.StructuredToolHandlerFunc[ReadArgs, ReadResult]
 			dprintf("fs_read stat error: %v", err)
 			return res, err
 		}
-		all, err := os.ReadFile(full)
-		if err != nil {
-			dprintf("fs_read read error: %v", err)
-			return res, err
-		}
 		limit := args.MaxBytes
 		if limit <= 0 {
 			limit = defaultReadMaxBytes
 		}
-		trunc := false
-		b := all
-		if len(b) > limit {
-			b = b[:limit]
-			trunc = true
+		f, err := os.Open(full)
+		if err != nil {
+			dprintf("fs_read open error: %v", err)
+			return res, err
 		}
+		defer f.Close()
+		r := io.LimitReader(f, int64(limit))
+		buf, err := io.ReadAll(r)
+		if err != nil {
+			dprintf("fs_read read error: %v", err)
+			return res, err
+		}
+		trunc := fi.Size() > int64(len(buf))
+
+		sha := ""
+		if fi.Size() <= maxHashBytes {
+			hf, err := os.Open(full)
+			if err == nil {
+				h := sha256.New()
+				if _, err := io.Copy(h, hf); err == nil {
+					sha = fmt.Sprintf("%x", h.Sum(nil))
+				}
+				hf.Close()
+			}
+		} else {
+			dprintf("fs_read: skip sha256 (size %d > cap %d)", fi.Size(), maxHashBytes)
+		}
+
 		enc := args.Encoding
 		if enc == "" {
-			if isText(b) {
+			sample := buf
+			if len(sample) > maxPeekBytesForSniff {
+				sample = sample[:maxPeekBytesForSniff]
+			}
+			if isText(sample) {
 				enc = string(encText)
 			} else {
 				enc = string(encBase64)
@@ -499,16 +552,16 @@ func handleRead(root string) mcp.StructuredToolHandlerFunc[ReadArgs, ReadResult]
 		}
 		var content string
 		if encodingKind(enc) == encBase64 {
-			content = base64.StdEncoding.EncodeToString(b)
+			content = base64.StdEncoding.EncodeToString(buf)
 		} else {
-			content = string(b)
+			content = string(buf)
 		}
 
 		res = ReadResult{
 			Path:      args.Path,
 			Size:      fi.Size(),
-			MIMEType:  detectMIME(full, b),
-			SHA256:    sha256sum(all), // full file hash
+			MIMEType:  detectMIME(full, buf),
+			SHA256:    sha,
 			Encoding:  enc,
 			Content:   content,
 			Truncated: trunc,
@@ -517,7 +570,7 @@ func handleRead(root string) mcp.StructuredToolHandlerFunc[ReadArgs, ReadResult]
 				ModifiedAt: fi.ModTime().UTC().Format(time.RFC3339),
 			},
 		}
-		dprintf("<- fs_read ok size=%d truncated=%v dur=%s", len(b), trunc, time.Since(start))
+		dprintf("<- fs_read ok size=%d truncated=%v dur=%s", len(buf), trunc, time.Since(start))
 		return res, nil
 	}
 }
@@ -583,8 +636,9 @@ func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResu
 			dprintf("fs_write error: %v", err)
 			return res, err
 		}
+		// Do not create parent directories unless explicitly requested.
 		if args.CreateDirs == nil {
-			b := true
+			b := false
 			args.CreateDirs = &b
 		}
 		if *args.CreateDirs {
@@ -598,6 +652,7 @@ func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResu
 			dprintf("fs_write error: %v", err)
 			return res, fmt.Errorf("invalid mode: %w", err)
 		}
+		modeProvided := args.Mode != ""
 		var data []byte
 		if encodingKind(args.Encoding) == encBase64 {
 			b, err := base64.StdEncoding.DecodeString(args.Content)
@@ -623,8 +678,15 @@ func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResu
 		if preErr == nil && preFi.IsDir() && (st == strategyOverwrite || st == strategyNoClobber) {
 			return res, fmt.Errorf("target is a directory: %s", args.Path)
 		}
+		if preErr == nil && !modeProvided {
+			if pm := preFi.Mode() & os.ModePerm; pm != 0 {
+				mode = pm
+			} else {
+				mode = 0o644
+			}
+		}
 
-		release, err := acquireLock(full, 3*time.Second)
+		release, err := acquireLock(ctx, full, 3*time.Second)
 		if err != nil {
 			dprintf("fs_write lock error: %v", err)
 			return res, err
@@ -738,8 +800,14 @@ func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResu
 		modAt := time.Now().UTC().Format(time.RFC3339)
 		modeStr := ""
 		if fi != nil && statErr == nil {
-			modAt = fi.ModTime().UTC().Format(time.RFC3339) // report actual file mtime
+			modAt = fi.ModTime().UTC().Format(time.RFC3339)
 			modeStr = fmt.Sprintf("%#o", fi.Mode()&os.ModePerm)
+		}
+		sha := ""
+		if len(final) <= int(maxHashBytes) {
+			sha = sha256sum(final)
+		} else {
+			dprintf("fs_write: skip sha256 (size %d > cap %d)", len(final), maxHashBytes)
 		}
 		res = WriteResult{
 			Path:     args.Path,
@@ -747,7 +815,7 @@ func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResu
 			Bytes:    len(final),
 			Created:  created,
 			MIMEType: mt,
-			SHA256:   sha256sum(final),
+			SHA256:   sha,
 			MetaFields: MetaFields{
 				Mode:       modeStr,
 				ModifiedAt: modAt,
@@ -783,7 +851,7 @@ func handleEdit(root string) mcp.StructuredToolHandlerFunc[EditArgs, EditResult]
 			return res, fmt.Errorf("target not a regular file: %s", args.Path)
 		}
 
-		release, err := acquireLock(full, 3*time.Second)
+		release, err := acquireLock(ctx, full, 3*time.Second)
 		if err != nil {
 			dprintf("fs_edit lock error: %v", err)
 			return res, err
@@ -805,20 +873,20 @@ func handleEdit(root string) mcp.StructuredToolHandlerFunc[EditArgs, EditResult]
 		count := 0
 		var out []byte
 		if args.Regex {
-			limit := args.Count
-			if limit <= 0 {
-				limit = 1
+			if args.Count <= 0 {
+				out = re.ReplaceAll(b, []byte(args.Replace))
+				count = len(re.FindAllIndex(b, -1))
+			} else {
+				remaining := args.Count
+				out = re.ReplaceAllFunc(b, func(m []byte) []byte {
+					if remaining == 0 {
+						return m
+					}
+					remaining--
+					count++
+					return []byte(args.Replace)
+				})
 			}
-			out = re.ReplaceAllFunc(b, func(m []byte) []byte {
-				if limit == 0 {
-					return m
-				}
-				count++
-				if limit > 0 {
-					limit--
-				}
-				return []byte(args.Replace)
-			})
 		} else {
 			old := string(b)
 			limit := args.Count
@@ -881,7 +949,7 @@ func handleList(root string) mcp.StructuredToolHandlerFunc[ListArgs, ListResult]
 				return
 			}
 			out.Entries = append(out.Entries, ListEntry{
-				Path:       strings.TrimPrefix(path, root+string(os.PathSeparator)),
+				Path:       filepath.ToSlash(trimUnderRoot(root, path)),
 				Name:       fi.Name(),
 				Kind:       kindOf(fi),
 				Size:       fi.Size(),
@@ -903,6 +971,11 @@ func handleList(root string) mcp.StructuredToolHandlerFunc[ListArgs, ListResult]
 					return out, err
 				}
 				for _, e := range ents {
+					select {
+					case <-ctx.Done():
+						return out, ctx.Err()
+					default:
+					}
 					info, err := e.Info()
 					if err != nil {
 						continue
@@ -913,6 +986,11 @@ func handleList(root string) mcp.StructuredToolHandlerFunc[ListArgs, ListResult]
 				err := filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
 					if err != nil {
 						return nil
+					}
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
 					}
 					add(path, info)
 					if count >= max {
@@ -973,6 +1051,11 @@ func handleSearch(root string) mcp.StructuredToolHandlerFunc[SearchArgs, SearchR
 			if err != nil {
 				return nil
 			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 			if d.IsDir() {
 				return nil
 			}
@@ -985,6 +1068,7 @@ func handleSearch(root string) mcp.StructuredToolHandlerFunc[SearchArgs, SearchR
 			}
 			defer f.Close()
 			scanner := bufio.NewScanner(f)
+			scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 			lineNo := 1
 			for scanner.Scan() {
 				txt := scanner.Text()
@@ -1002,6 +1086,9 @@ func handleSearch(root string) mcp.StructuredToolHandlerFunc[SearchArgs, SearchR
 					}
 				}
 				lineNo++
+			}
+			if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
+				return nil
 			}
 			return nil
 		})
@@ -1034,7 +1121,7 @@ func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult]
 			return out, err
 		}
 		for _, m := range matches {
-			out.Matches = append(out.Matches, strings.TrimPrefix(m, root+string(os.PathSeparator)))
+			out.Matches = append(out.Matches, filepath.ToSlash(trimUnderRoot(root, m)))
 			if len(out.Matches) >= max {
 				break
 			}
@@ -1059,77 +1146,77 @@ func main() {
 
 	readTool := mcp.NewTool(
 		"fs_read",
-		mcp.WithDescription("Read a file with optional max cap; defaults to 64KB; auto-encoding if unspecified"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Target file path or file:// URI under server root")),
-		mcp.WithString("encoding", mcp.Enum(string(encText), string(encBase64))),
-		mcp.WithNumber("max_bytes", mcp.Min(1)),
+		mcp.WithDescription("Read a file up to a byte limit. Auto-detects encoding when omitted."),
+		mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI under root")),
+		mcp.WithString("encoding", mcp.Enum(string(encText), string(encBase64)), mcp.Description("Force text or base64. If empty, the server detects.")),
+		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Maximum bytes to return (default 64 KiB)")),
 		mcp.WithOutputSchema[ReadResult](),
 	)
 	s.AddTool(readTool, mcp.NewStructuredToolHandler(handleRead(root)))
 
 	peekTool := mcp.NewTool(
 		"fs_peek",
-		mcp.WithDescription("Read a small window from a file for planning; defaults to 4KB"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithNumber("offset", mcp.Min(0)),
-		mcp.WithNumber("max_bytes", mcp.Min(1)),
+		mcp.WithDescription("Read a window of a file without loading it all"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("File path to read")),
+		mcp.WithNumber("offset", mcp.Min(0), mcp.Description("Byte offset to start from (default 0)")),
+		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Window size in bytes (default 4 KiB)")),
 		mcp.WithOutputSchema[PeekResult](),
 	)
 	s.AddTool(peekTool, mcp.NewStructuredToolHandler(handlePeek(root)))
 
 	writeTool := mcp.NewTool(
 		"fs_write",
-		mcp.WithDescription("Create or modify a file using strategies: overwrite, no_clobber, append, prepend, replace_range"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithString("encoding", mcp.Required(), mcp.Enum(string(encText), string(encBase64))),
-		mcp.WithString("content", mcp.Required()),
-		mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange))),
-		mcp.WithBoolean("create_dirs"),
-		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$")),
-		mcp.WithNumber("start", mcp.Min(0)),
-		mcp.WithNumber("end", mcp.Min(0)),
+		mcp.WithDescription("Create or modify a file using a chosen strategy"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Target file path")),
+		mcp.WithString("encoding", mcp.Required(), mcp.Enum(string(encText), string(encBase64)), mcp.Description("Encoding of content: text or base64")),
+		mcp.WithString("content", mcp.Required(), mcp.Description("Data to write")),
+		mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange)), mcp.Description("Write behavior; defaults to overwrite")),
+		mcp.WithBoolean("create_dirs", mcp.Description("Create parent directories when needed (default false)")),
+		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("File mode in octal. Omit to preserve existing")),
+		mcp.WithNumber("start", mcp.Min(0), mcp.Description("Start byte for replace_range")),
+		mcp.WithNumber("end", mcp.Min(0), mcp.Description("End byte (exclusive) for replace_range")),
 		mcp.WithOutputSchema[WriteResult](),
 	)
 	s.AddTool(writeTool, mcp.NewStructuredToolHandler(handleWrite(root)))
 
 	editTool := mcp.NewTool(
 		"fs_edit",
-		mcp.WithDescription("Search/replace within a text file; regex optional; optionally limit replacements"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithString("pattern", mcp.Required()),
-		mcp.WithString("replace", mcp.Required()),
-		mcp.WithBoolean("regex"),
-		mcp.WithNumber("count", mcp.Min(0)),
+		mcp.WithDescription("Search and replace text in a file"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Target text file")),
+		mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to match")),
+		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text; $1 etc. in regex mode")),
+		mcp.WithBoolean("regex", mcp.Description("Treat pattern as regular expression")),
+		mcp.WithNumber("count", mcp.Min(0), mcp.Description("If >0, maximum replacements; 0 means replace all")),
 		mcp.WithOutputSchema[EditResult](),
 	)
 	s.AddTool(editTool, mcp.NewStructuredToolHandler(handleEdit(root)))
 
 	listTool := mcp.NewTool(
 		"fs_list",
-		mcp.WithDescription("List directory contents; can recurse with a cap; defaults to 1000 entries"),
-		mcp.WithString("path", mcp.Required()),
-		mcp.WithBoolean("recursive"),
-		mcp.WithNumber("max_entries", mcp.Min(1)),
+		mcp.WithDescription("List directory contents"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Directory to list")),
+		mcp.WithBoolean("recursive", mcp.Description("Recurse into subdirectories")),
+		mcp.WithNumber("max_entries", mcp.Min(1), mcp.Description("Maximum entries to return (default 1000)")),
 		mcp.WithOutputSchema[ListResult](),
 	)
 	s.AddTool(listTool, mcp.NewStructuredToolHandler(handleList(root)))
 
 	searchTool := mcp.NewTool(
 		"fs_search",
-		mcp.WithDescription("Search for text within files; regex optional; defaults to 100 results"),
-		mcp.WithString("pattern", mcp.Required()),
-		mcp.WithString("path"),
-		mcp.WithBoolean("regex"),
-		mcp.WithNumber("max_results", mcp.Min(1)),
+		mcp.WithDescription("Search files for text"),
+		mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to find")),
+		mcp.WithString("path", mcp.Description("Optional start directory; defaults to root")),
+		mcp.WithBoolean("regex", mcp.Description("Interpret pattern as regular expression")),
+		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 100)")),
 		mcp.WithOutputSchema[SearchResult](),
 	)
 	s.AddTool(searchTool, mcp.NewStructuredToolHandler(handleSearch(root)))
 
 	globTool := mcp.NewTool(
 		"fs_glob",
-		mcp.WithDescription("Glob for files under root (supports *, ?, [class]; not **); defaults to 1000 matches"),
-		mcp.WithString("pattern", mcp.Required()),
-		mcp.WithNumber("max_results", mcp.Min(1)),
+		mcp.WithDescription("Glob for pathnames under the root"),
+		mcp.WithString("pattern", mcp.Required(), mcp.Description("Glob pattern")),
+		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 1000)")),
 		mcp.WithOutputSchema[GlobResult](),
 	)
 	s.AddTool(globTool, mcp.NewStructuredToolHandler(handleGlob(root)))

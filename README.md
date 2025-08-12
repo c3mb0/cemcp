@@ -27,6 +27,80 @@ cemcp --root /path/to/workspace
 
 The server communicates over stdio. See `main.go` for details on the available tools and arguments.
 
+## Tools
+
+Each tool operates only within the configured root directory.
+
+### `fs_read`
+Read a file.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | string | File path or `file://` URI. |
+| `encoding` | string | Optional `text` or `base64`. If omitted, the server detects the format. |
+| `max_bytes` | number | Maximum bytes to return (default 64&nbsp;KiB). |
+
+### `fs_peek`
+Read a small window of a file.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | string | File path. |
+| `offset` | number | Byte offset to start from (default 0). |
+| `max_bytes` | number | Window size in bytes (default 4&nbsp;KiB). |
+
+### `fs_write`
+Create or modify a file.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | string | Target file path. |
+| `encoding` | string | `text` or `base64` for `content`. |
+| `content` | string | Data to write. |
+| `strategy` | string | `overwrite`, `no_clobber`, `append`, `prepend`, or `replace_range` (default `overwrite`). |
+| `create_dirs` | boolean | Create parent directories (default `false`). |
+| `mode` | string | File mode in octal. Omit to preserve existing permissions. |
+| `start` | number | Start byte for `replace_range`. |
+| `end` | number | End byte (exclusive) for `replace_range`. |
+
+### `fs_edit`
+Search and replace within a text file.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | string | Target text file. |
+| `pattern` | string | Substring or regex to match. |
+| `replace` | string | Replacement text. Supports `$1` etc. in regex mode. |
+| `regex` | boolean | Treat `pattern` as a regular expression. |
+| `count` | number | If >0, maximum replacements; 0 replaces all. |
+
+### `fs_list`
+List directory contents.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | string | Directory to list. |
+| `recursive` | boolean | Recurse into subdirectories. |
+| `max_entries` | number | Maximum entries to return (default 1000). |
+
+### `fs_search`
+Search files for text.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `pattern` | string | Substring or regex to find. |
+| `path` | string | Optional start directory (default root). |
+| `regex` | boolean | Interpret `pattern` as regex. |
+| `max_results` | number | Maximum matches to return (default 100). |
+
+### `fs_glob`
+Match files using glob patterns.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `pattern` | string | Glob pattern relative to root. |
+| `max_results` | number | Maximum matches to return (default 1000). |
+
 ### Debug Logging
 
 Pass `--debug` to write verbose logs to `./log`.

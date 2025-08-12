@@ -143,7 +143,7 @@ func TestAtomicWriteAndLock(t *testing.T) {
 		t.Fatalf("overwrite wrong content: %q err=%v", b, err)
 	}
 
-	rel, err := acquireLock(p, time.Second)
+	rel, err := acquireLock(context.Background(), p, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestAtomicWriteAndLock(t *testing.T) {
 	go func() {
 		defer close(done)
 		defer rel() // release the first lock after testing contention
-		_, err := acquireLock(p, 300*time.Millisecond)
+		_, err := acquireLock(context.Background(), p, 300*time.Millisecond)
 		if err == nil {
 			t.Errorf("expected timeout, got nil")
 		}
@@ -240,13 +240,13 @@ func TestHandleEdit_TextAndRegex(t *testing.T) {
 	if string(b) != "one 2 two three" {
 		t.Fatalf("text replace wrong: %q", string(b))
 	}
-	// regex, all
+	// regex, replace all
 	res, err = ed(context.Background(), mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: "t[a-z]+", Replace: "X", Regex: true})
-	if err != nil || res.Replacements != 1 {
+	if err != nil || res.Replacements != 2 {
 		t.Fatalf("regex edit failed: %+v err=%v", res, err)
 	}
 	b, _ = os.ReadFile(p)
-	if !strings.Contains(string(b), "one 2 X three") {
+	if !strings.Contains(string(b), "one 2 X X") {
 		t.Fatalf("regex replace wrong: %q", string(b))
 	}
 }
