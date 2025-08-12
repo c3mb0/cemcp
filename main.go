@@ -28,7 +28,7 @@ import (
 
 // ---- Config ----
 var rootDirFlag = flag.String("root", "", "filesystem root (defaults to CWD or $FS_ROOT)")
-var debugFlag = flag.Bool("debug", false, "enable debug logging to ./log")
+var debugFlag = flag.String("debug", "", "write debug logs to this file")
 
 // ---- Debug logging ----
 
@@ -45,10 +45,10 @@ const (
 )
 
 func initDebug() {
-	if !*debugFlag {
+	if *debugFlag == "" {
 		return
 	}
-	f, err := os.Create("log") // hardcoded per request; truncate each run
+	f, err := os.Create(*debugFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open log file: %v\n", err)
 		return
@@ -120,6 +120,40 @@ func getRoot() (string, error) {
 		base = resolved
 	}
 	return base, nil
+}
+
+// ensureSingleInstance terminates any previously running instance of this
+// service and writes the current process PID to a file so subsequent runs can
+// replace it.
+func ensureSingleInstance() (func(), error) {
+	pidFile := filepath.Join(os.TempDir(), "fs-mcp-go.pid")
+	exePath, _ := os.Executable()
+	execName := filepath.Base(exePath)
+
+	if b, err := os.ReadFile(pidFile); err == nil {
+		if old, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
+			if procNameMatches(old, execName) {
+				if p, err := os.FindProcess(old); err == nil {
+					_ = p.Kill()
+				}
+			}
+		}
+	}
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+		return nil, err
+	}
+	return func() { os.Remove(pidFile) }, nil
+}
+
+func procNameMatches(pid int, want string) bool {
+	if runtime.GOOS != "linux" {
+		return false
+	}
+	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		return false
+	}
+	return filepath.Base(exe) == want
 }
 
 // safeJoin ensures target is within root; resolves parent to avoid symlink escapes
@@ -1125,6 +1159,11 @@ func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult]
 
 func main() {
 	flag.Parse()
+	cleanup, err := ensureSingleInstance()
+	if err != nil {
+		panic(err)
+	}
+	defer cleanup()
 	initDebug()
 	root, err := getRoot()
 	if err != nil {

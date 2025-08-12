@@ -20,7 +20,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 	}
 
 	// debug disabled early return
-	*debugFlag = false
+	*debugFlag = ""
 	debugEnabled = false
 	debugLog = nil
 	initDebug()
@@ -30,7 +30,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 
 	// error creating log
 	os.Mkdir("log", 0o755)
-	*debugFlag = true
+	*debugFlag = "log"
 	initDebug()
 	if debugEnabled {
 		t.Fatalf("debug should not enable on error")
