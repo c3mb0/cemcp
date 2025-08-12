@@ -289,3 +289,18 @@ func TestHandleGlobErrors(t *testing.T) {
 		t.Fatalf("expected join error")
 	}
 }
+
+func TestHandleGlobMaxResults(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "a.txt"), []byte(""), 0o644)
+	mustWrite(t, filepath.Join(root, "b.txt"), []byte(""), 0o644)
+	mustWrite(t, filepath.Join(root, "c.txt"), []byte(""), 0o644)
+	gb := handleGlob(root)
+	res, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: "*.txt", MaxResults: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Matches) != 2 {
+		t.Fatalf("expected 2 matches, got %d", len(res.Matches))
+	}
+}

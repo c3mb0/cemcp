@@ -79,6 +79,14 @@ const (
 	encBase64 encodingKind = "base64"
 )
 
+const (
+	defaultReadMaxBytes     = 64 * 1024
+	defaultPeekMaxBytes     = 4 * 1024
+	defaultListMaxEntries   = 1000
+	defaultGlobMaxResults   = 1000
+	defaultSearchMaxResults = 100
+)
+
 // ---- Helpers ----
 
 func mustAbs(p string) string {
@@ -235,7 +243,7 @@ func readWindow(path string, offset, max int) ([]byte, int64, bool, error) {
 		return nil, sz, false, err
 	}
 	if max <= 0 {
-		max = 4096
+		max = defaultPeekMaxBytes
 	}
 	buf := make([]byte, max)
 	n, err := f.Read(buf)
@@ -410,7 +418,8 @@ type ListResult struct {
 }
 
 type GlobArgs struct {
-	Pattern string `json:"pattern"`
+	Pattern    string `json:"pattern"`
+	MaxResults int    `json:"max_results,omitempty"`
 }
 
 type GlobResult struct {
@@ -470,10 +479,14 @@ func handleRead(root string) mcp.StructuredToolHandlerFunc[ReadArgs, ReadResult]
 			dprintf("fs_read read error: %v", err)
 			return res, err
 		}
+		limit := args.MaxBytes
+		if limit <= 0 {
+			limit = defaultReadMaxBytes
+		}
 		trunc := false
 		b := all
-		if args.MaxBytes > 0 && len(b) > args.MaxBytes {
-			b = b[:args.MaxBytes]
+		if len(b) > limit {
+			b = b[:limit]
 			trunc = true
 		}
 		enc := args.Encoding
@@ -513,7 +526,7 @@ func handlePeek(root string) mcp.StructuredToolHandlerFunc[PeekArgs, PeekResult]
 	return func(ctx context.Context, req mcp.CallToolRequest, args PeekArgs) (PeekResult, error) {
 		start := time.Now()
 		if args.MaxBytes <= 0 {
-			args.MaxBytes = 4096
+			args.MaxBytes = defaultPeekMaxBytes
 		}
 		dprintf("-> fs_peek path=%q offset=%d max_bytes=%d", args.Path, args.Offset, args.MaxBytes)
 		var res PeekResult
@@ -860,7 +873,7 @@ func handleList(root string) mcp.StructuredToolHandlerFunc[ListArgs, ListResult]
 		}
 		max := args.MaxEntries
 		if max <= 0 {
-			max = 2000
+			max = defaultListMaxEntries
 		}
 		count := 0
 		add := func(path string, fi os.FileInfo) {
@@ -930,7 +943,7 @@ func handleSearch(root string) mcp.StructuredToolHandlerFunc[SearchArgs, SearchR
 		}
 		max := args.MaxResults
 		if max <= 0 {
-			max = 100
+			max = defaultSearchMaxResults
 		}
 		var rx *regexp.Regexp
 		if args.Regex {
@@ -1001,7 +1014,7 @@ func handleSearch(root string) mcp.StructuredToolHandlerFunc[SearchArgs, SearchR
 func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args GlobArgs) (GlobResult, error) {
 		start := time.Now()
-		dprintf("-> fs_glob pattern=%q", args.Pattern)
+		dprintf("-> fs_glob pattern=%q max_results=%d", args.Pattern, args.MaxResults)
 		var out GlobResult
 		if args.Pattern == "" {
 			return out, errors.New("pattern required")
@@ -1011,6 +1024,10 @@ func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult]
 			dprintf("fs_glob error: %v", err)
 			return out, err
 		}
+		max := args.MaxResults
+		if max <= 0 {
+			max = defaultGlobMaxResults
+		}
 		matches, err := filepath.Glob(full)
 		if err != nil {
 			dprintf("fs_glob error: %v", err)
@@ -1018,6 +1035,9 @@ func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult]
 		}
 		for _, m := range matches {
 			out.Matches = append(out.Matches, strings.TrimPrefix(m, root+string(os.PathSeparator)))
+			if len(out.Matches) >= max {
+				break
+			}
 		}
 		dprintf("<- fs_glob ok matches=%d dur=%s", len(out.Matches), time.Since(start))
 		return out, nil
@@ -1039,7 +1059,7 @@ func main() {
 
 	readTool := mcp.NewTool(
 		"fs_read",
-		mcp.WithDescription("Read a file with optional max cap; auto-encoding if unspecified"),
+		mcp.WithDescription("Read a file with optional max cap; defaults to 64KB; auto-encoding if unspecified"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Target file path or file:// URI under server root")),
 		mcp.WithString("encoding", mcp.Enum(string(encText), string(encBase64))),
 		mcp.WithNumber("max_bytes", mcp.Min(1)),
@@ -1086,7 +1106,7 @@ func main() {
 
 	listTool := mcp.NewTool(
 		"fs_list",
-		mcp.WithDescription("List directory contents; can recurse with a cap"),
+		mcp.WithDescription("List directory contents; can recurse with a cap; defaults to 1000 entries"),
 		mcp.WithString("path", mcp.Required()),
 		mcp.WithBoolean("recursive"),
 		mcp.WithNumber("max_entries", mcp.Min(1)),
@@ -1096,7 +1116,7 @@ func main() {
 
 	searchTool := mcp.NewTool(
 		"fs_search",
-		mcp.WithDescription("Search for text within files; regex optional"),
+		mcp.WithDescription("Search for text within files; regex optional; defaults to 100 results"),
 		mcp.WithString("pattern", mcp.Required()),
 		mcp.WithString("path"),
 		mcp.WithBoolean("regex"),
@@ -1107,8 +1127,9 @@ func main() {
 
 	globTool := mcp.NewTool(
 		"fs_glob",
-		mcp.WithDescription("Glob for files under root (supports *, ?, [class]; not **)"),
+		mcp.WithDescription("Glob for files under root (supports *, ?, [class]; not **); defaults to 1000 matches"),
 		mcp.WithString("pattern", mcp.Required()),
+		mcp.WithNumber("max_results", mcp.Min(1)),
 		mcp.WithOutputSchema[GlobResult](),
 	)
 	s.AddTool(globTool, mcp.NewStructuredToolHandler(handleGlob(root)))

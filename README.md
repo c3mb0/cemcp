@@ -11,6 +11,7 @@ A minimal file system server built with [MCP-Go](https://github.com/mark3labs/mc
 - Directory listing and globbing helpers
 - Content search with substring or regex support
 - Optional debug logging to `./log`
+- Sane defaults to limit output: 64KB reads, 4KB peeks, 1000 list/glob entries, 100 search matches
 
 ## Installation
 
