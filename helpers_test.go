@@ -173,7 +173,11 @@ func TestKindOf(t *testing.T) {
 			t.Fatalf("want symlink, got %s", k)
 		}
 	}
-	other := kindOf(fakeFileInfo{mode: os.ModeNamedPipe})
+	pipe := kindOf(fakeFileInfo{mode: os.ModeNamedPipe})
+	if pipe != "pipe" {
+		t.Fatalf("want pipe, got %s", pipe)
+	}
+	other := kindOf(fakeFileInfo{mode: os.ModeIrregular})
 	if other != "other" {
 		t.Fatalf("want other, got %s", other)
 	}
