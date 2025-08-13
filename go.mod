@@ -2,7 +2,10 @@ module github.com/useinsider/cemcp
 
 go 1.24.5
 
-require github.com/mark3labs/mcp-go v0.37.0
+require (
+	github.com/bmatcuk/doublestar/v4 v4.0.2
+	github.com/mark3labs/mcp-go v0.37.0
+)
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
