@@ -19,7 +19,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// debug disabled early return
+    // Disabled debug should return early
 	*debugFlag = ""
 	debugEnabled = false
 	debugLog = nil
@@ -28,7 +28,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 		t.Fatalf("log should not exist when disabled")
 	}
 
-	// error creating log
+    // Error when creating the log file
 	os.Mkdir("log", 0o755)
 	*debugFlag = "log"
 	initDebug()
@@ -37,7 +37,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 	}
 	os.Remove("log")
 
-	// success path
+    // Successful run
 	initDebug()
 	dprintf("hello %s", "world")
 	data, err := os.ReadFile("log")
@@ -101,6 +101,9 @@ func TestDetectMIMEAndIsTextExtra(t *testing.T) {
 	if mt := detectMIME("noext", []byte("hi")); mt != "text/plain; charset=utf-8" {
 		t.Fatalf("text detect failed: %s", mt)
 	}
+	if !isText([]byte{'a', '\n', '\r', '\t', 'b'}) {
+		t.Fatalf("expected text with whitespace controls")
+	}
 	if isText([]byte{0, 1, 2}) {
 		t.Fatalf("expected binary not text")
 	}
@@ -133,7 +136,7 @@ func TestAtomicWrite(t *testing.T) {
 	if err != nil || string(data) != "x" {
 		t.Fatalf("atomic write failed: %v %q", err, string(data))
 	}
-	// rename error when target is directory
+    // Rename should fail when the target is a directory
 	targetDir := filepath.Join(dir, "sub")
 	os.Mkdir(targetDir, 0o755)
 	if err := atomicWrite(targetDir, []byte("x"), 0o600); err == nil {

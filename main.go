@@ -123,9 +123,8 @@ func getRoot() (string, error) {
 	return base, nil
 }
 
-// ensureSingleInstance terminates any previously running instance of this
-// service and writes the current process PID to a file so subsequent runs can
-// replace it.
+// ensureSingleInstance kills any prior server recorded in a PID file and writes
+// the current PID so later runs can replace it.
 func ensureSingleInstance() (func(), error) {
 	pidFile := filepath.Join(os.TempDir(), "fs-mcp-go.pid")
 	exePath, _ := os.Executable()
@@ -157,9 +156,9 @@ func procNameMatches(pid int, want string) bool {
 	return filepath.Base(exe) == want
 }
 
-// safeJoin ensures target is within root; resolves parent to avoid symlink escapes
-// NOTE: This version validates the parent path but does NOT resolve the final path.
-// For read operations where following symlinks could escape the root, use safeJoinResolveFinal.
+// safeJoin joins root and reqPath while keeping the result within root.
+// It validates the parent path but doesn't resolve the final element.
+// Use safeJoinResolveFinal when a symlink at the end could escape the root.
 func safeJoin(root, reqPath string) (string, error) {
 	if reqPath == "" {
 		return "", errors.New("path is required")
@@ -202,8 +201,8 @@ func safeJoin(root, reqPath string) (string, error) {
 	return finalAbs, nil
 }
 
-// safeJoinResolveFinal resolves the final target (follows the last symlink) and ensures it stays under root.
-// This prevents read/peek from traversing a symlink inside the root that points outside the root.
+// safeJoinResolveFinal follows the last path element and ensures the target
+// stays within root. It guards read/peek from symlinks that jump outside.
 func safeJoinResolveFinal(root, reqPath string) (string, error) {
 	p, err := safeJoin(root, reqPath)
 	if err != nil {
@@ -1225,19 +1224,23 @@ func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult]
 						cancel()
 						return
 					}
-					if ok {
-						mu.Lock()
-						matches = append(matches, filepath.ToSlash(p))
-						if len(matches) >= max {
-							mu.Unlock()
-							cancel()
-							return
-						}
-						mu.Unlock()
-					}
-				}
-			}()
-		}
+                                        if ok {
+                                                mu.Lock()
+                                                if len(matches) >= max {
+                                                        mu.Unlock()
+                                                        return
+                                                }
+                                                matches = append(matches, filepath.ToSlash(p))
+                                                if len(matches) >= max {
+                                                        mu.Unlock()
+                                                        cancel()
+                                                        return
+                                                }
+                                                mu.Unlock()
+                                        }
+                                }
+                        }()
+                }
 		wg.Wait()
 		walkWG.Wait()
 		if walkErr != nil && !errors.Is(walkErr, context.Canceled) {
@@ -1270,47 +1273,47 @@ func main() {
 
 	readTool := mcp.NewTool(
 		"fs_read",
-		mcp.WithDescription("Read a file up to a byte limit. Auto-detects encoding when omitted."),
-		mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI under root")),
-		mcp.WithString("encoding", mcp.Enum(string(encText), string(encBase64)), mcp.Description("Force text or base64. If empty, the server detects.")),
-		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Maximum bytes to return (default 64 KiB)")),
+           mcp.WithDescription("Read a file up to a byte limit. Detects encoding when unspecified."),
+           mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI within root")),
+           mcp.WithString("encoding", mcp.Enum(string(encText), string(encBase64)), mcp.Description("Force text or base64; auto-detected if empty")),
+           mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Maximum bytes to return (default 64 KiB)")),
 		mcp.WithOutputSchema[ReadResult](),
 	)
 	s.AddTool(readTool, mcp.NewStructuredToolHandler(handleRead(root)))
 
 	peekTool := mcp.NewTool(
 		"fs_peek",
-		mcp.WithDescription("Read a window of a file without loading it all"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("File path to read")),
-		mcp.WithNumber("offset", mcp.Min(0), mcp.Description("Byte offset to start from (default 0)")),
-		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Window size in bytes (default 4 KiB)")),
+           mcp.WithDescription("Read a file window without loading the whole file"),
+           mcp.WithString("path", mcp.Required(), mcp.Description("File path")),
+           mcp.WithNumber("offset", mcp.Min(0), mcp.Description("Byte offset to start at (default 0)")),
+           mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Window size in bytes (default 4 KiB)")),
 		mcp.WithOutputSchema[PeekResult](),
 	)
 	s.AddTool(peekTool, mcp.NewStructuredToolHandler(handlePeek(root)))
 
 	writeTool := mcp.NewTool(
 		"fs_write",
-		mcp.WithDescription("Create or modify a file using a chosen strategy"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Target file path")),
-		mcp.WithString("encoding", mcp.Required(), mcp.Enum(string(encText), string(encBase64)), mcp.Description("Encoding of content: text or base64")),
-		mcp.WithString("content", mcp.Required(), mcp.Description("Data to write")),
-		mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange)), mcp.Description("Write behavior; defaults to overwrite")),
-		mcp.WithBoolean("create_dirs", mcp.Description("Create parent directories when needed (default false)")),
-		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("File mode in octal. Omit to preserve existing")),
-		mcp.WithNumber("start", mcp.Min(0), mcp.Description("Start byte for replace_range")),
-		mcp.WithNumber("end", mcp.Min(0), mcp.Description("End byte (exclusive) for replace_range")),
+           mcp.WithDescription("Create or modify a file using a strategy"),
+           mcp.WithString("path", mcp.Required(), mcp.Description("Target file path")),
+           mcp.WithString("encoding", mcp.Required(), mcp.Enum(string(encText), string(encBase64)), mcp.Description("Content encoding: text or base64")),
+           mcp.WithString("content", mcp.Required(), mcp.Description("Data to write")),
+           mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange)), mcp.Description("Write behavior (default overwrite)")),
+           mcp.WithBoolean("create_dirs", mcp.Description("Create parent directories if needed (default false)")),
+           mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("File mode in octal; omit to keep existing")),
+           mcp.WithNumber("start", mcp.Min(0), mcp.Description("Start byte for replace_range")),
+           mcp.WithNumber("end", mcp.Min(0), mcp.Description("End byte (exclusive) for replace_range")),
 		mcp.WithOutputSchema[WriteResult](),
 	)
 	s.AddTool(writeTool, mcp.NewStructuredToolHandler(handleWrite(root)))
 
 	editTool := mcp.NewTool(
 		"fs_edit",
-		mcp.WithDescription("Search and replace text in a file"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Target text file")),
-		mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to match")),
-		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text; $1 etc. in regex mode")),
-		mcp.WithBoolean("regex", mcp.Description("Treat pattern as regular expression")),
-		mcp.WithNumber("count", mcp.Min(0), mcp.Description("If >0, maximum replacements; 0 means replace all")),
+           mcp.WithDescription("Search and replace text in a file"),
+           mcp.WithString("path", mcp.Required(), mcp.Description("Target text file")),
+           mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to match")),
+           mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text; supports $1 etc. in regex mode")),
+           mcp.WithBoolean("regex", mcp.Description("Treat pattern as a regular expression")),
+           mcp.WithNumber("count", mcp.Min(0), mcp.Description("If >0, maximum replacements; 0 replaces all")),
 		mcp.WithOutputSchema[EditResult](),
 	)
 	s.AddTool(editTool, mcp.NewStructuredToolHandler(handleEdit(root)))
@@ -1327,20 +1330,20 @@ func main() {
 
 	searchTool := mcp.NewTool(
 		"fs_search",
-		mcp.WithDescription("Recursively search files for text. Processes files concurrently."),
-		mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to find")),
-		mcp.WithString("path", mcp.Description("Start directory relative to root")),
-		mcp.WithBoolean("regex", mcp.Description("Interpret pattern as regular expression")),
-		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 100)")),
+           mcp.WithDescription("Search files recursively for text using concurrent workers"),
+           mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to find")),
+           mcp.WithString("path", mcp.Description("Start directory relative to root")),
+           mcp.WithBoolean("regex", mcp.Description("Interpret pattern as regular expression")),
+           mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 100)")),
 		mcp.WithOutputSchema[SearchResult](),
 	)
 	s.AddTool(searchTool, mcp.NewStructuredToolHandler(handleSearch(root)))
 
 	globTool := mcp.NewTool(
 		"fs_glob",
-		mcp.WithDescription("Shell-style glob under the root. Supports ** for recursive matches."),
-		mcp.WithString("pattern", mcp.Required(), mcp.Description("Glob pattern relative to root")),
-		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 1000)")),
+           mcp.WithDescription("Match paths with shell-style globbing and ** for recursion"),
+           mcp.WithString("pattern", mcp.Required(), mcp.Description("Glob pattern relative to root")),
+           mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 1000)")),
 		mcp.WithOutputSchema[GlobResult](),
 	)
 	s.AddTool(globTool, mcp.NewStructuredToolHandler(handleGlob(root)))

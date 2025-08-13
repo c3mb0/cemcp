@@ -25,7 +25,7 @@ func mustWrite(t *testing.T, p string, b []byte, mode os.FileMode) {
 
 func makeSymlink(t *testing.T, target, link string) error {
 	t.Helper()
-	// Windows often needs admin privileges for symlinks.
+    // Windows often requires admin privileges for symlinks.
 	if runtime.GOOS == "windows" {
 		return os.ErrPermission
 	}
@@ -43,7 +43,7 @@ func TestSafeJoin(t *testing.T) {
 		t.Fatalf("safeJoin failed: %v %q", err, p)
 	}
 
-	// Clean traversal that normalizes back inside root should be accepted
+    // A traversal that normalizes back inside the root should be accepted
 	tricky := filepath.ToSlash("../" + filepath.Base(root) + "/dir/file.txt")
 	if _, err := safeJoin(root, tricky); err != nil {
 		t.Fatalf("safeJoin rejected normalized path: %v", err)
@@ -54,7 +54,7 @@ func TestSafeJoin(t *testing.T) {
 		t.Fatalf("safeJoin allowed absolute escape")
 	}
 
-	// file:// URI support with percent‑encoded space
+    // File:// URI with a percent-encoded space
 	u := "file://" + strings.ReplaceAll(filepath.ToSlash(filepath.Join(root, "dir", "file space.txt")), " ", "%20")
 	mustWrite(t, filepath.Join(root, "dir", "file space.txt"), []byte("z"), 0o644)
 	if _, err := safeJoin(root, u); err != nil {
@@ -208,6 +208,25 @@ func TestHandleWriteStrategies(t *testing.T) {
 	b, _ = os.ReadFile(filepath.Join(root, "a.txt"))
 	if string(b) != "ZXYC" {
 		t.Fatalf("replace_range wrong: %q", string(b))
+	}
+}
+
+func TestHandleWritePrependCreates(t *testing.T) {
+	root := t.TempDir()
+	wr := handleWrite(root)
+	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "new.txt", Encoding: "text", Content: "X", Strategy: strategyPrepend})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "new.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "X" {
+		t.Fatalf("prepend create wrong: %q", string(b))
+	}
+	if !res.Created {
+		t.Fatalf("expected created true")
 	}
 }
 

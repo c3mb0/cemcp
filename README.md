@@ -1,17 +1,17 @@
 # cemcp
 
-A minimal file system server built with [MCP-Go](https://github.com/mark3labs/mcp-go). It exposes tools for safe file operations under a configurable root directory and is intended for integration as an MCP tool. The focus is on practical compatibility with agentic workflows rather than strict spec minutiae.
+A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mcp-go). It exposes safe file operations under a configurable root for agent integration, prioritizing practical compatibility over strict spec minutiae.
 
 ## Features
 
 - Safe path resolution with traversal and symlink escape protection
 - Read and peek utilities with automatic MIME and encoding detection
-- Multiple write strategies: overwrite, no_clobber, append, prepend and replace_range
+- Multiple write strategies: overwrite, no_clobber, append, prepend, and replace_range
 - Atomic writes and advisory file locking
-- Directory listing and globbing helpers (now with `**` support)
-- Content search with substring or regex support, processed concurrently for speed
+- Directory listing and globbing with `**` for recursion
+- Concurrent content search with substring or regex matching
 - Optional debug logging to a specified file
-- Sane defaults to limit output: 64KB reads, 4KB peeks, 1000 list/glob entries, 100 search matches
+- Sane defaults to cap I/O: 64 KiB reads, 4 KiB peeks, 1000 list/glob entries, 100 search matches
 
 ## Installation
 
@@ -25,13 +25,13 @@ go install github.com/useinsider/cemcp@latest
 cemcp --root /path/to/workspace
 ```
 
-The server communicates over stdio. See `main.go` for details on the available tools and arguments.
+The server communicates over stdio; see `main.go` for tool definitions and flags.
 
 ### Agent guidance
 
 - All paths are resolved relative to the configured root; do not attempt `../` escapes.
-- `fs_glob` understands shell-style patterns with `**` for recursion. For recursive searches prefer `fs_search` or a glob with `**` rather than manual directory walking.
-- Responses are structured JSON objects; clients must parse the fields rather than expect plain text.
+- `fs_glob` uses shell-style patterns with `**` for recursion. Use `fs_search` or a `**` glob for recursive work.
+- Responses are structured JSON objects; clients must parse fields instead of expecting plain text.
 
 ## Tools
 
@@ -43,7 +43,7 @@ Read a file.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `path` | string | File path or `file://` URI. |
-| `encoding` | string | Optional `text` or `base64`. If omitted, the server detects the format. |
+| `encoding` | string | Optional `text` or `base64`; auto-detected if omitted. |
 | `max_bytes` | number | Maximum bytes to return (default 64&nbsp;KiB). |
 
 ### `fs_peek`
@@ -61,11 +61,11 @@ Create or modify a file.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `path` | string | Target file path. |
-| `encoding` | string | `text` or `base64` for `content`. |
+| `encoding` | string | Content encoding: `text` or `base64`. |
 | `content` | string | Data to write. |
 | `strategy` | string | `overwrite`, `no_clobber`, `append`, `prepend`, or `replace_range` (default `overwrite`). |
-| `create_dirs` | boolean | Create parent directories (default `false`). |
-| `mode` | string | File mode in octal. Omit to preserve existing permissions. |
+| `create_dirs` | boolean | Create parent directories (default false). |
+| `mode` | string | File mode in octal; omit to keep existing permissions. |
 | `start` | number | Start byte for `replace_range`. |
 | `end` | number | End byte (exclusive) for `replace_range`. |
 
@@ -76,7 +76,7 @@ Search and replace within a text file.
 |-----------|------|-------------|
 | `path` | string | Target text file. |
 | `pattern` | string | Substring or regex to match. |
-| `replace` | string | Replacement text. Supports `$1` etc. in regex mode. |
+| `replace` | string | Replacement text; supports `$1` etc. in regex mode. |
 | `regex` | boolean | Treat `pattern` as a regular expression. |
 | `count` | number | If >0, maximum replacements; 0 replaces all. |
 
