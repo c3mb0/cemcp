@@ -18,6 +18,21 @@ func TestTrimUnderRootHandlesSlashRoot(t *testing.T) {
 	}
 }
 
+func TestTrimUnderRootReturnsEmptyForRoot(t *testing.T) {
+	root := t.TempDir()
+	if got := trimUnderRoot(root, root); got != "" {
+		t.Fatalf("expected empty result, got %q", got)
+	}
+}
+
+func TestTrimUnderRootNormalizesPath(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "a", "..", "b")
+	if got := trimUnderRoot(root, p); got != "b" {
+		t.Fatalf("expected 'b', got %q", got)
+	}
+}
+
 func TestReadSkipsHugeHash(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "huge.bin")

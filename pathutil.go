@@ -94,6 +94,10 @@ func safeJoinResolveFinal(root, reqPath string) (string, error) {
 func trimUnderRoot(root, p string) string {
 	r := mustAbs(root)
 	r = strings.TrimSuffix(r, string(os.PathSeparator))
+	pAbs := mustAbs(p)
+	if pAbs == r {
+		return ""
+	}
 	prefix := r + string(os.PathSeparator)
-	return strings.TrimPrefix(p, prefix)
+	return strings.TrimPrefix(pAbs, prefix)
 }
