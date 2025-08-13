@@ -56,9 +56,8 @@ func TestWriteCreateDirsDefaultFalse(t *testing.T) {
 	root := t.TempDir()
 	h := handleWrite(root)
 	_, err := h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
-		Path:     "nested/dir/file.txt",
-		Encoding: string(encText),
-		Content:  "hi",
+		Path:    "nested/dir/file.txt",
+		Content: "hi",
 	})
 	if err == nil {
 		t.Fatalf("expected error when creating dirs not opted in")
@@ -73,9 +72,8 @@ func TestOverwritePreservesModeWhenEmpty(t *testing.T) {
 	}
 	h := handleWrite(root)
 	if _, err := h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
-		Path:     "f.txt",
-		Encoding: string(encText),
-		Content:  "v2",
+		Path:    "f.txt",
+		Content: "v2",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -96,10 +94,9 @@ func TestOverwriteChangesModeWhenProvided(t *testing.T) {
 	}
 	h := handleWrite(root)
 	if _, err := h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
-		Path:     "f2.txt",
-		Encoding: string(encText),
-		Content:  "v2",
-		Mode:     "0644",
+		Path:    "f2.txt",
+		Content: "v2",
+		Mode:    "0644",
 	}); err != nil {
 		t.Fatal(err)
 	}

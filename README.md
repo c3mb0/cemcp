@@ -5,7 +5,7 @@ A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mc
 ## Features
 
 - Safe path resolution with traversal and symlink escape protection
-- Read and peek utilities with automatic MIME and encoding detection
+- Read and peek utilities with automatic MIME detection
 - Multiple write strategies: overwrite, no_clobber, append, prepend, and replace_range
 - Atomic writes and advisory file locking
 - Directory listing and globbing with `**` for recursion
@@ -46,7 +46,6 @@ Read a file.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `path` | string | File path or `file://` URI. |
-| `encoding` | string | Optional `text` or `base64`; auto-detected if omitted. |
 | `max_bytes` | number | Maximum bytes to return (default 64&nbsp;KiB). |
 
 ### `fs_peek`
@@ -64,7 +63,6 @@ Create or modify a file.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `path` | string | Target file path. |
-| `encoding` | string | Content encoding: `text` or `base64`. |
 | `content` | string | Data to write. |
 | `strategy` | string | `overwrite`, `no_clobber`, `append`, `prepend`, or `replace_range` (default `overwrite`). |
 | `create_dirs` | boolean | Create parent directories (default false). |

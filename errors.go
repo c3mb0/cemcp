@@ -20,7 +20,6 @@ var (
 	ErrInsufficientSpace = errors.New("insufficient disk space")
 	ErrFileTooLarge      = errors.New("file exceeds size limit")
 	ErrLockTimeout       = errors.New("lock acquisition timeout")
-	ErrInvalidEncoding   = errors.New("invalid encoding specified")
 	ErrInvalidStrategy   = errors.New("invalid write strategy")
 
 	// Pattern errors

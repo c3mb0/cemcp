@@ -26,9 +26,8 @@ func setupServer(root string) *server.MCPServer {
 	s := server.NewMCPServer("fs-mcp-go", "0.1.0")
 
 	readOpts := []mcp.ToolOption{
-		mcp.WithDescription("Read a file up to a byte limit. Detects encoding when unspecified."),
+		mcp.WithDescription("Read a file up to a byte limit."),
 		mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI within root")),
-		mcp.WithString("encoding", mcp.Enum(string(encText), string(encBase64)), mcp.Description("Force text or base64; auto-detected if empty")),
 		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Maximum bytes to return (default 64 KiB)")),
 	}
 	if !*compatFlag {
@@ -60,7 +59,6 @@ func setupServer(root string) *server.MCPServer {
 	writeOpts := []mcp.ToolOption{
 		mcp.WithDescription("Create or modify a file using a strategy"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Target file path")),
-		mcp.WithString("encoding", mcp.Required(), mcp.Enum(string(encText), string(encBase64)), mcp.Description("Content encoding: text or base64")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Data to write")),
 		mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange)), mcp.Description("Write behavior (default overwrite)")),
 		mcp.WithBoolean("create_dirs", mcp.Description("Create parent directories if needed (default false)")),
