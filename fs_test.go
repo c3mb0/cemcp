@@ -25,7 +25,7 @@ func mustWrite(t *testing.T, p string, b []byte, mode os.FileMode) {
 
 func makeSymlink(t *testing.T, target, link string) error {
 	t.Helper()
-    // Windows often requires admin privileges for symlinks.
+	// Windows often requires admin privileges for symlinks.
 	if runtime.GOOS == "windows" {
 		return os.ErrPermission
 	}
@@ -43,7 +43,7 @@ func TestSafeJoin(t *testing.T) {
 		t.Fatalf("safeJoin failed: %v %q", err, p)
 	}
 
-    // A traversal that normalizes back inside the root should be accepted
+	// A traversal that normalizes back inside the root should be accepted
 	tricky := filepath.ToSlash("../" + filepath.Base(root) + "/dir/file.txt")
 	if _, err := safeJoin(root, tricky); err != nil {
 		t.Fatalf("safeJoin rejected normalized path: %v", err)
@@ -54,7 +54,7 @@ func TestSafeJoin(t *testing.T) {
 		t.Fatalf("safeJoin allowed absolute escape")
 	}
 
-    // File:// URI with a percent-encoded space
+	// File:// URI with a percent-encoded space
 	u := "file://" + strings.ReplaceAll(filepath.ToSlash(filepath.Join(root, "dir", "file space.txt")), " ", "%20")
 	mustWrite(t, filepath.Join(root, "dir", "file space.txt"), []byte("z"), 0o644)
 	if _, err := safeJoin(root, u); err != nil {
@@ -172,17 +172,17 @@ func TestHandleWriteStrategies(t *testing.T) {
 	root := t.TempDir()
 	// Overwrite create
 	wr := handleWrite(root)
-	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Encoding: "text", Content: "A"})
+	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "A"})
 	if err != nil || !res.Created || res.Bytes != 1 {
 		t.Fatalf("overwrite create failed: %+v err=%v", res, err)
 	}
 	// No clobber
-	_, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Encoding: "text", Content: "B", Strategy: strategyNoClobber})
+	_, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "B", Strategy: strategyNoClobber})
 	if err == nil {
 		t.Fatalf("no_clobber should error if exists")
 	}
 	// Append
-	res, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Encoding: "text", Content: "C", Strategy: strategyAppend})
+	res, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "C", Strategy: strategyAppend})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestHandleWriteStrategies(t *testing.T) {
 		t.Fatalf("append wrong: %q", string(b))
 	}
 	// Prepend
-	res, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Encoding: "text", Content: "Z", Strategy: strategyPrepend})
+	res, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "Z", Strategy: strategyPrepend})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestHandleWriteStrategies(t *testing.T) {
 	}
 	// Replace range
 	s, e := 1, 2
-	res, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Encoding: "text", Content: "XY", Strategy: strategyReplaceRange, Start: &s, End: &e})
+	res, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "XY", Strategy: strategyReplaceRange, Start: &s, End: &e})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestHandleWriteStrategies(t *testing.T) {
 func TestHandleWritePrependCreates(t *testing.T) {
 	root := t.TempDir()
 	wr := handleWrite(root)
-	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "new.txt", Encoding: "text", Content: "X", Strategy: strategyPrepend})
+	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "new.txt", Content: "X", Strategy: strategyPrepend})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,25 +296,6 @@ func TestHandleGlobRecursive(t *testing.T) {
 	}
 	if len(res.Matches) != 1 || res.Matches[0] != "a/b/c.txt" {
 		t.Fatalf("recursive glob failed: %+v", res.Matches)
-	}
-}
-
-// Regression: MaxBytes encoding inference should use the truncated window, hash uses full file
-func TestRead_MaxBytes_HashAndEncoding(t *testing.T) {
-	root := t.TempDir()
-	p := filepath.Join(root, "bin.bin")
-	data := append([]byte{0, 1, 2, 3}, []byte(strings.Repeat("A", 8192))...)
-	mustWrite(t, p, data, 0o644)
-	rd := handleRead(root)
-	res, err := rd(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "bin.bin", MaxBytes: 2})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Encoding != string(encBase64) {
-		t.Fatalf("expected base64 for binary sample, got %s", res.Encoding)
-	}
-	if res.Size != int64(len(data)) {
-		t.Fatalf("size mismatch")
 	}
 }
 

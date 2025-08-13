@@ -11,14 +11,6 @@ const (
 	strategyReplaceRange writeStrategy = "replace_range" // Replace specific byte range
 )
 
-// Encoding types for file content
-type encodingKind string
-
-const (
-	encText   encodingKind = "text"   // UTF-8 text content
-	encBase64 encodingKind = "base64" // Base64 encoded binary
-)
-
 // MetaFields contains common file metadata
 type MetaFields struct {
 	Mode       string `json:"mode,omitempty"`        // File permissions in octal
@@ -28,7 +20,6 @@ type MetaFields struct {
 // ReadArgs defines parameters for reading files
 type ReadArgs struct {
 	Path     string `json:"path" description:"File path or file:// URI within root"`
-	Encoding string `json:"encoding,omitempty" description:"Force text or base64; auto-detected if empty"`
 	MaxBytes int    `json:"max_bytes,omitempty" description:"Maximum bytes to return (default 64KB)"`
 }
 
@@ -38,7 +29,6 @@ type ReadResult struct {
 	Size      int64  `json:"size" description:"Total file size in bytes"`
 	MIMEType  string `json:"mime_type" description:"Detected MIME type"`
 	SHA256    string `json:"sha256" description:"SHA256 hash of content (if under 32MB)"`
-	Encoding  string `json:"encoding" description:"Content encoding used (text/base64)"`
 	Content   string `json:"content" description:"File content (possibly truncated)"`
 	Truncated bool   `json:"truncated" description:"Whether content was truncated"`
 	MetaFields
@@ -53,19 +43,17 @@ type PeekArgs struct {
 
 // PeekResult contains file peek operation results
 type PeekResult struct {
-	Path     string `json:"path" description:"Original requested path"`
-	Offset   int    `json:"offset" description:"Starting byte offset"`
-	Size     int64  `json:"size" description:"Total file size"`
-	EOF      bool   `json:"eof" description:"Whether window reached end of file"`
-	Encoding string `json:"encoding" description:"Content encoding (text/base64)"`
-	Content  string `json:"content" description:"Window content"`
+	Path    string `json:"path" description:"Original requested path"`
+	Offset  int    `json:"offset" description:"Starting byte offset"`
+	Size    int64  `json:"size" description:"Total file size"`
+	EOF     bool   `json:"eof" description:"Whether window reached end of file"`
+	Content string `json:"content" description:"Window content"`
 	MetaFields
 }
 
 // WriteArgs defines parameters for writing files
 type WriteArgs struct {
 	Path       string        `json:"path" description:"Target file path"`
-	Encoding   string        `json:"encoding" description:"Content encoding: text or base64"`
 	Content    string        `json:"content" description:"Data to write"`
 	Strategy   writeStrategy `json:"strategy,omitempty" description:"Write behavior (default overwrite)"`
 	CreateDirs *bool         `json:"create_dirs,omitempty" description:"Create parent directories if needed"`

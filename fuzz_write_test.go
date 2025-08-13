@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,20 +12,13 @@ import (
 
 // FuzzHandleWrite ensures arbitrary inputs do not cause panics.
 func FuzzHandleWrite(f *testing.F) {
-	f.Add("f.txt", []byte("seed"), false)
-	f.Fuzz(func(t *testing.T, path string, data []byte, useBase64 bool) {
+	f.Add("f.txt", []byte("seed"))
+	f.Fuzz(func(t *testing.T, path string, data []byte) {
 		root := t.TempDir()
 		h := handleWrite(root)
-		enc := string(encText)
-		content := string(data)
-		if useBase64 {
-			enc = string(encBase64)
-			content = base64.StdEncoding.EncodeToString(data)
-		}
 		_, _ = h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
 			Path:       path,
-			Encoding:   enc,
-			Content:    content,
+			Content:    string(data),
 			CreateDirs: boolPtr(true),
 		})
 	})

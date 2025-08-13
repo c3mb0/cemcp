@@ -23,7 +23,7 @@ func TestWriteReadIntegration(t *testing.T) {
 
 	_, err = srv.Client().CallTool(context.Background(), mcp.CallToolRequest{
 		Params: mcp.CallToolParams{Name: "fs_write", Arguments: map[string]any{
-			"path": "hello.txt", "encoding": string(encText), "content": "hello",
+			"path": "hello.txt", "content": "hello",
 		}},
 	})
 	if err != nil {

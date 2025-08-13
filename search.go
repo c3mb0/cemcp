@@ -20,10 +20,8 @@ import (
 
 // SearchConfig holds search configuration
 type SearchConfig struct {
-	Workers       int
-	MaxLineLength int
-	ScanBuffer    int
-	MaxBuffer     int
+	Workers    int
+	ScanBuffer int
 }
 
 // DefaultSearchConfig returns optimized search configuration
@@ -33,10 +31,8 @@ func DefaultSearchConfig() SearchConfig {
 		workers = 8 // Cap workers to prevent resource exhaustion
 	}
 	return SearchConfig{
-		Workers:       workers,
-		MaxLineLength: 1 << 20,   // 1MB max line
-		ScanBuffer:    64 * 1024, // 64KB initial buffer
-		MaxBuffer:     1 << 20,   // 1MB max buffer (reduced from 4MB)
+		Workers:    workers,
+		ScanBuffer: 64 * 1024, // 64KB initial buffer
 	}
 }
 
@@ -247,14 +243,22 @@ func searchFile(path, pattern string, rx *regexp.Regexp, root string, maxMatches
 	var matches []SearchMatch
 	var bytesRead int64
 
-	// Create scanner with reasonable buffer
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, config.ScanBuffer), config.MaxBuffer)
+	reader := bufio.NewReaderSize(f, config.ScanBuffer)
 
 	lineNo := 1
-	for scanner.Scan() && len(matches) < maxMatches {
-		line := scanner.Text()
-		bytesRead += int64(len(line)) + 1 // +1 for newline
+	for len(matches) < maxMatches {
+		line, err := reader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			dprintf("read error in %s: %v", path, err)
+			break
+		}
+
+		if len(line) == 0 && err == io.EOF {
+			break
+		}
+
+		bytesRead += int64(len(line))
+		line = strings.TrimRight(line, "\n")
 
 		// Check for match
 		var found bool
@@ -287,11 +291,10 @@ func searchFile(path, pattern string, rx *regexp.Regexp, root string, maxMatches
 			dprintf("stopping search in %s: too many lines", path)
 			break
 		}
-	}
 
-	// Check for scanner errors (ignore EOF)
-	if err := scanner.Err(); err != nil && err != io.EOF {
-		dprintf("scan error in %s: %v", path, err)
+		if err == io.EOF {
+			break
+		}
 	}
 
 	return matches, bytesRead

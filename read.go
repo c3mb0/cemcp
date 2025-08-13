@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -13,13 +12,13 @@ import (
 )
 
 func formatReadResult(r ReadResult) string {
-	return fmt.Sprintf("path=%s size=%d mime=%s sha=%s enc=%s truncated=%v content=%s", r.Path, r.Size, r.MIMEType, r.SHA256, r.Encoding, r.Truncated, r.Content)
+	return fmt.Sprintf("path=%s size=%d mime=%s sha=%s truncated=%v content=%s", r.Path, r.Size, r.MIMEType, r.SHA256, r.Truncated, r.Content)
 }
 
 func handleRead(root string) mcp.StructuredToolHandlerFunc[ReadArgs, ReadResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args ReadArgs) (ReadResult, error) {
 		start := time.Now()
-		dprintf("-> fs_read path=%q encoding=%q max_bytes=%d", args.Path, args.Encoding, args.MaxBytes)
+		dprintf("-> fs_read path=%q max_bytes=%d", args.Path, args.MaxBytes)
 		var res ReadResult
 		full, err := safeJoinResolveFinal(root, args.Path)
 		if err != nil {
@@ -63,31 +62,13 @@ func handleRead(root string) mcp.StructuredToolHandlerFunc[ReadArgs, ReadResult]
 			dprintf("fs_read: skip sha256 (size %d > cap %d)", fi.Size(), maxHashBytes)
 		}
 
-		enc := args.Encoding
-		if enc == "" {
-			sample := buf
-			if len(sample) > maxPeekBytesForSniff {
-				sample = sample[:maxPeekBytesForSniff]
-			}
-			if isText(sample) {
-				enc = string(encText)
-			} else {
-				enc = string(encBase64)
-			}
-		}
-		var content string
-		if encodingKind(enc) == encBase64 {
-			content = base64.StdEncoding.EncodeToString(buf)
-		} else {
-			content = string(buf)
-		}
+		content := string(buf)
 
 		res = ReadResult{
 			Path:      args.Path,
 			Size:      fi.Size(),
 			MIMEType:  detectMIME(full, buf),
 			SHA256:    sha,
-			Encoding:  enc,
 			Content:   content,
 			Truncated: trunc,
 			MetaFields: MetaFields{

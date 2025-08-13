@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -18,12 +17,8 @@ func formatWriteResult(r WriteResult) string {
 func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args WriteArgs) (WriteResult, error) {
 		start := time.Now()
-		dprintf("-> fs_write path=%q strategy=%q encoding=%q bytes=%d", args.Path, args.Strategy, args.Encoding, len(args.Content))
+		dprintf("-> fs_write path=%q strategy=%q bytes=%d", args.Path, args.Strategy, len(args.Content))
 		var res WriteResult
-		if args.Encoding == "" {
-			dprintf("fs_write error: encoding required")
-			return res, errors.New("encoding is required: text|base64")
-		}
 		full, err := safeJoin(root, args.Path)
 		if err != nil {
 			dprintf("fs_write error: %v", err)
@@ -45,17 +40,7 @@ func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResu
 			return res, fmt.Errorf("invalid mode: %w", err)
 		}
 		modeProvided := args.Mode != ""
-		var data []byte
-		if encodingKind(args.Encoding) == encBase64 {
-			b, err := base64.StdEncoding.DecodeString(args.Content)
-			if err != nil {
-				dprintf("fs_write error: %v", err)
-				return res, fmt.Errorf("invalid base64 content: %w", err)
-			}
-			data = b
-		} else {
-			data = []byte(args.Content)
-		}
+		data := []byte(args.Content)
 		st := args.Strategy
 		if st == "" {
 			st = strategyOverwrite

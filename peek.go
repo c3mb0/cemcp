@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -45,7 +44,7 @@ func readWindow(path string, offset, max int) ([]byte, int64, bool, error) {
 }
 
 func formatPeekResult(r PeekResult) string {
-	return fmt.Sprintf("path=%s offset=%d size=%d eof=%v enc=%s content=%s", r.Path, r.Offset, r.Size, r.EOF, r.Encoding, r.Content)
+	return fmt.Sprintf("path=%s offset=%d size=%d eof=%v content=%s", r.Path, r.Offset, r.Size, r.EOF, r.Content)
 }
 
 func handlePeek(root string) mcp.StructuredToolHandlerFunc[PeekArgs, PeekResult] {
@@ -66,12 +65,7 @@ func handlePeek(root string) mcp.StructuredToolHandlerFunc[PeekArgs, PeekResult]
 			dprintf("fs_peek read error: %v", err)
 			return res, err
 		}
-		enc := string(encText)
 		content := string(chunk)
-		if !isText(chunk) {
-			enc = string(encBase64)
-			content = base64.StdEncoding.EncodeToString(chunk)
-		}
 		var mode string
 		var modAt string
 		if fi, statErr := os.Lstat(full); statErr == nil {
@@ -79,12 +73,11 @@ func handlePeek(root string) mcp.StructuredToolHandlerFunc[PeekArgs, PeekResult]
 			modAt = fi.ModTime().UTC().Format(time.RFC3339)
 		}
 		res = PeekResult{
-			Path:     args.Path,
-			Offset:   args.Offset,
-			Size:     sz,
-			EOF:      eof,
-			Encoding: enc,
-			Content:  content,
+			Path:    args.Path,
+			Offset:  args.Offset,
+			Size:    sz,
+			EOF:     eof,
+			Content: content,
 			MetaFields: MetaFields{
 				Mode:       mode,
 				ModifiedAt: modAt,

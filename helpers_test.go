@@ -201,9 +201,9 @@ func TestHandleReadAndPeekVariants(t *testing.T) {
 	p := filepath.Join(root, "b.bin")
 	os.WriteFile(p, []byte("hello"), 0o644)
 	rd := handleRead(root)
-	res, err := rd(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "b.bin", Encoding: string(encBase64)})
-	if err != nil || res.Encoding != string(encBase64) {
-		t.Fatalf("explicit encoding failed: %+v %v", res, err)
+	res, err := rd(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "b.bin"})
+	if err != nil || res.Content != "hello" {
+		t.Fatalf("read failed: %+v %v", res, err)
 	}
 	if _, err := rd(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "../bad"}); err == nil {
 		t.Fatalf("expected path error")
@@ -221,33 +221,27 @@ func TestHandleReadAndPeekVariants(t *testing.T) {
 func TestHandleWriteErrors(t *testing.T) {
 	root := t.TempDir()
 	wr := handleWrite(root)
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "x"}); err == nil {
-		t.Fatalf("expected encoding error")
-	}
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Encoding: "base64", Content: "%%%"}); err == nil {
-		t.Fatalf("expected base64 error")
-	}
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Encoding: "text", Strategy: "bogus"}); err == nil {
+	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Strategy: "bogus", Content: "x"}); err == nil {
 		t.Fatalf("expected strategy error")
 	}
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "dir/file.txt", Encoding: "text", Content: "x", CreateDirs: boolPtr(false)}); err == nil {
+	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "dir/file.txt", Content: "x", CreateDirs: boolPtr(false)}); err == nil {
 		t.Fatalf("expected missing dir error")
 	}
 
 	// append to directory should error
 	os.Mkdir(filepath.Join(root, "adir"), 0o755)
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "adir", Encoding: "text", Content: "x", Strategy: strategyAppend}); err == nil {
+	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "adir", Content: "x", Strategy: strategyAppend}); err == nil {
 		t.Fatalf("expected append dir error")
 	}
 
 	// prepare file for replace_range tests
 	os.WriteFile(filepath.Join(root, "r.txt"), []byte("abcd"), 0o644)
 	s, e := 3, 2 // invalid range (end < start)
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "r.txt", Encoding: "text", Content: "x", Strategy: strategyReplaceRange, Start: &s, End: &e}); err == nil {
+	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "r.txt", Content: "x", Strategy: strategyReplaceRange, Start: &s, End: &e}); err == nil {
 		t.Fatalf("expected invalid range error")
 	}
 	s = 0
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "r.txt", Encoding: "text", Content: "x", Strategy: strategyReplaceRange, Start: &s}); err == nil {
+	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "r.txt", Content: "x", Strategy: strategyReplaceRange, Start: &s}); err == nil {
 		t.Fatalf("expected missing end error")
 	}
 }
