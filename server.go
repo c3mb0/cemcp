@@ -28,7 +28,7 @@ func setupServer(root string) *server.MCPServer {
 	readOpts := []mcp.ToolOption{
 		mcp.WithDescription("Read a file up to a byte limit."),
 		mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI within root")),
-		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Maximum bytes to return (default 64 KiB)")),
+		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Maximum bytes to return")),
 	}
 	if !*compatFlag {
 		readOpts = append(readOpts, mcp.WithOutputSchema[ReadResult]())
@@ -43,8 +43,8 @@ func setupServer(root string) *server.MCPServer {
 	peekOpts := []mcp.ToolOption{
 		mcp.WithDescription("Read a file window without loading the whole file"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("File path")),
-		mcp.WithNumber("offset", mcp.Min(0), mcp.Description("Byte offset to start at (default 0)")),
-		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Window size in bytes (default 4 KiB)")),
+		mcp.WithNumber("offset", mcp.Min(0), mcp.Description("Byte offset to start at")),
+		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Window size in bytes")),
 	}
 	if !*compatFlag {
 		peekOpts = append(peekOpts, mcp.WithOutputSchema[PeekResult]())
@@ -57,12 +57,12 @@ func setupServer(root string) *server.MCPServer {
 	}
 
 	writeOpts := []mcp.ToolOption{
-		mcp.WithDescription("Create or modify a file using a strategy"),
+		mcp.WithDescription("Create or modify a file with a strategy"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Target file path")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Data to write")),
-		mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange)), mcp.Description("Write behavior (default overwrite)")),
-		mcp.WithBoolean("create_dirs", mcp.Description("Create parent directories if needed (default false)")),
-		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("File mode in octal; omit to keep existing")),
+		mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange)), mcp.Description("Write strategy: overwrite, no_clobber, append, prepend, replace_range")),
+		mcp.WithBoolean("create_dirs", mcp.Description("Create parent directories if needed")),
+		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("File mode in octal, keep existing if omitted")),
 		mcp.WithNumber("start", mcp.Min(0), mcp.Description("Start byte for replace_range")),
 		mcp.WithNumber("end", mcp.Min(0), mcp.Description("End byte (exclusive) for replace_range")),
 	}
@@ -80,9 +80,9 @@ func setupServer(root string) *server.MCPServer {
 		mcp.WithDescription("Search and replace text in a file"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Target text file")),
 		mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to match")),
-		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text; supports $1 etc. in regex mode")),
+		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text; $1 etc. works in regex mode")),
 		mcp.WithBoolean("regex", mcp.Description("Treat pattern as a regular expression")),
-		mcp.WithNumber("count", mcp.Min(0), mcp.Description("If >0, maximum replacements; 0 replaces all")),
+		mcp.WithNumber("count", mcp.Min(0), mcp.Description("Maximum replacements; 0 means all")),
 	}
 	if !*compatFlag {
 		editOpts = append(editOpts, mcp.WithOutputSchema[EditResult]())
@@ -98,7 +98,7 @@ func setupServer(root string) *server.MCPServer {
 		mcp.WithDescription("List directory contents"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Directory to list")),
 		mcp.WithBoolean("recursive", mcp.Description("Recurse into subdirectories")),
-		mcp.WithNumber("max_entries", mcp.Min(1), mcp.Description("Maximum entries to return (default 1000)")),
+		mcp.WithNumber("max_entries", mcp.Min(1), mcp.Description("Maximum entries to return")),
 	}
 	if !*compatFlag {
 		listOpts = append(listOpts, mcp.WithOutputSchema[ListResult]())
@@ -111,11 +111,11 @@ func setupServer(root string) *server.MCPServer {
 	}
 
 	searchOpts := []mcp.ToolOption{
-		mcp.WithDescription("Search files recursively for text using concurrent workers"),
+		mcp.WithDescription("Search files recursively for text"),
 		mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to find")),
 		mcp.WithString("path", mcp.Description("Start directory relative to root")),
 		mcp.WithBoolean("regex", mcp.Description("Interpret pattern as regular expression")),
-		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 100)")),
+		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return")),
 	}
 	if !*compatFlag {
 		searchOpts = append(searchOpts, mcp.WithOutputSchema[SearchResult]())
@@ -128,9 +128,9 @@ func setupServer(root string) *server.MCPServer {
 	}
 
 	globOpts := []mcp.ToolOption{
-		mcp.WithDescription("Match paths with shell-style globbing and ** for recursion"),
+		mcp.WithDescription("Match paths using shell-style globbing; ** enables recursion"),
 		mcp.WithString("pattern", mcp.Required(), mcp.Description("Glob pattern relative to root")),
-		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 1000)")),
+		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return")),
 	}
 	if !*compatFlag {
 		globOpts = append(globOpts, mcp.WithOutputSchema[GlobResult]())
@@ -140,6 +140,37 @@ func setupServer(root string) *server.MCPServer {
 		s.AddTool(globTool, wrapTextHandler(handleGlob(root), formatGlobResult))
 	} else {
 		s.AddTool(globTool, mcp.NewStructuredToolHandler(handleGlob(root)))
+	}
+
+	mkdirOpts := []mcp.ToolOption{
+		mcp.WithDescription("Create a directory"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Directory path to create")),
+		mcp.WithBoolean("parents", mcp.Description("Create parent directories if needed")),
+		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("Directory mode in octal")),
+	}
+	if !*compatFlag {
+		mkdirOpts = append(mkdirOpts, mcp.WithOutputSchema[MkdirResult]())
+	}
+	mkdirTool := mcp.NewTool("fs_mkdir", mkdirOpts...)
+	if *compatFlag {
+		s.AddTool(mkdirTool, wrapTextHandler(handleMkdir(root), formatMkdirResult))
+	} else {
+		s.AddTool(mkdirTool, mcp.NewStructuredToolHandler(handleMkdir(root)))
+	}
+
+	rmdirOpts := []mcp.ToolOption{
+		mcp.WithDescription("Remove a directory"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Directory to remove")),
+		mcp.WithBoolean("recursive", mcp.Description("Remove directory contents recursively")),
+	}
+	if !*compatFlag {
+		rmdirOpts = append(rmdirOpts, mcp.WithOutputSchema[RmdirResult]())
+	}
+	rmdirTool := mcp.NewTool("fs_rmdir", rmdirOpts...)
+	if *compatFlag {
+		s.AddTool(rmdirTool, wrapTextHandler(handleRmdir(root), formatRmdirResult))
+	} else {
+		s.AddTool(rmdirTool, mcp.NewStructuredToolHandler(handleRmdir(root)))
 	}
 
 	return s
