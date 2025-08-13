@@ -267,6 +267,19 @@ func TestHandleListAndGlob(t *testing.T) {
 	}
 }
 
+func TestHandleGlobRecursive(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "a", "b", "c.txt"), []byte(""), 0o644)
+	gb := handleGlob(root)
+	res, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: "**/*.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Matches) != 1 || res.Matches[0] != "a/b/c.txt" {
+		t.Fatalf("recursive glob failed: %+v", res.Matches)
+	}
+}
+
 // Regression: MaxBytes encoding inference should use the truncated window, hash uses full file
 func TestRead_MaxBytes_HashAndEncoding(t *testing.T) {
 	root := t.TempDir()

@@ -1,6 +1,6 @@
 # cemcp
 
-A minimal file system server built with [MCP-Go](https://github.com/mark3labs/mcp-go). It exposes tools for safe file operations under a configurable root directory and is intended for integration as an MCP tool.
+A minimal file system server built with [MCP-Go](https://github.com/mark3labs/mcp-go). It exposes tools for safe file operations under a configurable root directory and is intended for integration as an MCP tool. The focus is on practical compatibility with agentic workflows rather than strict spec minutiae.
 
 ## Features
 
@@ -8,9 +8,9 @@ A minimal file system server built with [MCP-Go](https://github.com/mark3labs/mc
 - Read and peek utilities with automatic MIME and encoding detection
 - Multiple write strategies: overwrite, no_clobber, append, prepend and replace_range
 - Atomic writes and advisory file locking
-- Directory listing and globbing helpers
-- Content search with substring or regex support
-- Optional debug logging to `./log`
+- Directory listing and globbing helpers (now with `**` support)
+- Content search with substring or regex support, processed concurrently for speed
+- Optional debug logging to a specified file
 - Sane defaults to limit output: 64KB reads, 4KB peeks, 1000 list/glob entries, 100 search matches
 
 ## Installation
@@ -26,6 +26,12 @@ cemcp --root /path/to/workspace
 ```
 
 The server communicates over stdio. See `main.go` for details on the available tools and arguments.
+
+### Agent guidance
+
+- All paths are resolved relative to the configured root; do not attempt `../` escapes.
+- `fs_glob` understands shell-style patterns with `**` for recursion. For recursive searches prefer `fs_search` or a glob with `**` rather than manual directory walking.
+- Responses are structured JSON objects; clients must parse the fields rather than expect plain text.
 
 ## Tools
 
@@ -84,7 +90,7 @@ List directory contents.
 | `max_entries` | number | Maximum entries to return (default 1000). |
 
 ### `fs_search`
-Search files for text.
+Search files for text using concurrent file scanning.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -94,7 +100,7 @@ Search files for text.
 | `max_results` | number | Maximum matches to return (default 100). |
 
 ### `fs_glob`
-Match files using glob patterns.
+Match files using glob patterns. Supports `**` to span directories and runs concurrently for large trees.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -103,7 +109,7 @@ Match files using glob patterns.
 
 ### Debug Logging
 
-Pass `--debug` to write verbose logs to `./log`.
+Pass `--debug /path/to/log` to write verbose logs to the specified file.
 
 ## Testing
 
@@ -113,24 +119,27 @@ Fetch dependencies first:
 go mod download
 ```
 
-Run unit tests:
-
-```bash
-go test ./... -count=1
-```
-
-With the race detector:
+### Run unit tests
 
 ```bash
 go test ./... -race -count=1
 ```
 
-Fuzzers (Go 1.18+):
+### Run fuzzers (Go 1.18+)
 
 ```bash
+# Fuzz path joiners
 GOFLAGS="-tags=go1.18" go test -run=^$ -fuzz=FuzzSafeJoin -fuzztime=30s
+GOFLAGS="-tags=go1.18" go test -run=^$ -fuzz=FuzzSafeJoinResolveFinal -fuzztime=30s
+
+# Fuzz editor
 GOFLAGS="-tags=go1.18" go test -run=^$ -fuzz=FuzzEdit -fuzztime=30s
 ```
+
+### Notes
+- Symlink checks are skipped on Windows when unsupported.
+- The suite exercises: path safety, MIME/text heuristics, windowed reads, modes, atomic writes & lock contention, all write strategies, and handler flows (read/peek/edit/list/glob).
+- Use `-race` regularly; handlers and the lock code are sensitive to concurrent access.
 
 ## License
 
