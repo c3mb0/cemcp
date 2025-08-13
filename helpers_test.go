@@ -101,6 +101,9 @@ func TestDetectMIMEAndIsTextExtra(t *testing.T) {
 	if mt := detectMIME("noext", []byte("hi")); mt != "text/plain; charset=utf-8" {
 		t.Fatalf("text detect failed: %s", mt)
 	}
+	if !isText([]byte{'a', '\n', '\r', '\t', 'b'}) {
+		t.Fatalf("expected text with whitespace controls")
+	}
 	if isText([]byte{0, 1, 2}) {
 		t.Fatalf("expected binary not text")
 	}
