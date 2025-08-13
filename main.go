@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"mime"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,47 +24,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
-
-// ---- Config ----
-var rootDirFlag = flag.String("root", "", "filesystem root (defaults to CWD or $FS_ROOT)")
-var debugFlag = flag.String("debug", "", "write debug logs to this file")
-var compatFlag = flag.Bool("compat", false, "return tool results as plain text instead of JSON")
-
-// ---- Debug logging ----
-
-var (
-	debugEnabled bool
-	debugMu      sync.Mutex
-	debugLog     *log.Logger
-)
-
-// Resource caps to guard against excessive CPU or memory use
-const (
-	maxPeekBytesForSniff = 1 << 20  // 1 MiB for MIME/encoding detection
-	maxHashBytes         = 32 << 20 // 32 MiB hashing cap
-)
-
-func initDebug() {
-	if *debugFlag == "" {
-		return
-	}
-	f, err := os.Create(*debugFlag)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to open log file: %v\n", err)
-		return
-	}
-	debugEnabled = true
-	debugLog = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
-}
-
-func dprintf(format string, args ...any) {
-	if !debugEnabled || debugLog == nil {
-		return
-	}
-	debugMu.Lock()
-	defer debugMu.Unlock()
-	debugLog.Printf(format, args...)
-}
 
 // ---- Types ----
 
@@ -87,148 +44,7 @@ const (
 	encBase64 encodingKind = "base64"
 )
 
-const (
-	defaultReadMaxBytes     = 64 * 1024
-	defaultPeekMaxBytes     = 4 * 1024
-	defaultListMaxEntries   = 1000
-	defaultGlobMaxResults   = 1000
-	defaultSearchMaxResults = 100
-)
-
 // ---- Helpers ----
-
-func mustAbs(p string) string {
-	ap, err := filepath.Abs(p)
-	if err != nil {
-		panic(err)
-	}
-	return ap
-}
-
-func getRoot() (string, error) {
-	var base string
-	if *rootDirFlag != "" {
-		base = mustAbs(*rootDirFlag)
-	} else if env := os.Getenv("FS_ROOT"); env != "" {
-		base = mustAbs(env)
-	} else {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return "", err
-		}
-		base = mustAbs(cwd)
-	}
-	if resolved, err := filepath.EvalSymlinks(base); err == nil {
-		base = resolved
-	}
-	return base, nil
-}
-
-// ensureSingleInstance terminates any previously running instance of this
-// service and writes the current process PID to a file so subsequent runs can
-// replace it.
-func ensureSingleInstance() (func(), error) {
-	pidFile := filepath.Join(os.TempDir(), "fs-mcp-go.pid")
-	exePath, _ := os.Executable()
-	execName := filepath.Base(exePath)
-
-	if b, err := os.ReadFile(pidFile); err == nil {
-		if old, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
-			if procNameMatches(old, execName) {
-				if p, err := os.FindProcess(old); err == nil {
-					_ = p.Kill()
-				}
-			}
-		}
-	}
-	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
-		return nil, err
-	}
-	return func() { os.Remove(pidFile) }, nil
-}
-
-func procNameMatches(pid int, want string) bool {
-	if runtime.GOOS != "linux" {
-		return false
-	}
-	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
-	if err != nil {
-		return false
-	}
-	return filepath.Base(exe) == want
-}
-
-// safeJoin joins root and reqPath while keeping the result within root.
-// It validates the parent path but does not resolve the final element.
-// For read operations where following symlinks could escape the root, use safeJoinResolveFinal.
-func safeJoin(root, reqPath string) (string, error) {
-	if reqPath == "" {
-		return "", errors.New("path is required")
-	}
-	if strings.HasPrefix(reqPath, "file://") {
-		u, err := url.Parse(reqPath)
-		if err != nil {
-			return "", fmt.Errorf("invalid file URI: %w", err)
-		}
-		if unesc, err := url.PathUnescape(u.Path); err == nil && unesc != "" {
-			reqPath = unesc
-		} else {
-			reqPath = u.Path
-		}
-	}
-	clean := filepath.Clean(reqPath)
-	rootAbs := mustAbs(root)
-	rootResolved := rootAbs
-	if r2, err := filepath.EvalSymlinks(rootAbs); err == nil {
-		rootResolved = r2
-	}
-	if filepath.IsAbs(clean) {
-		finalAbs := mustAbs(clean)
-		if !strings.HasPrefix(finalAbs+string(os.PathSeparator), rootResolved+string(os.PathSeparator)) && finalAbs != rootResolved {
-			return "", fmt.Errorf("refusing to access outside root: %s", reqPath)
-		}
-		return finalAbs, nil
-	}
-	dir, base := filepath.Split(clean)
-	parent := filepath.Join(rootAbs, dir)
-	parentResolved, err := filepath.EvalSymlinks(parent)
-	if err != nil {
-		parentResolved = mustAbs(parent)
-	}
-	final := filepath.Join(parentResolved, base)
-	finalAbs := mustAbs(final)
-	if !strings.HasPrefix(finalAbs+string(os.PathSeparator), rootResolved+string(os.PathSeparator)) && finalAbs != rootResolved {
-		return "", fmt.Errorf("refusing to access outside root: %s", reqPath)
-	}
-	return finalAbs, nil
-}
-
-// safeJoinResolveFinal follows the last path element and ensures the target
-// stays within root. It guards read/peek from symlinks that jump outside.
-func safeJoinResolveFinal(root, reqPath string) (string, error) {
-	p, err := safeJoin(root, reqPath)
-	if err != nil {
-		return "", err
-	}
-	resolved, err := filepath.EvalSymlinks(p)
-	if err != nil {
-		// If the file doesn't exist yet (e.g., during write no_clobber), return p;
-		// callers that need to forbid symlinks should still Lstat and check.
-		if !errors.Is(err, os.ErrNotExist) {
-			return "", err
-		}
-		return p, nil
-	}
-	rootResolved := mustAbs(root)
-	if r2, err := filepath.EvalSymlinks(rootResolved); err == nil {
-		rootResolved = r2
-	}
-	resolvedAbs := mustAbs(resolved)
-	if !strings.HasPrefix(resolvedAbs+string(os.PathSeparator), rootResolved+string(os.PathSeparator)) && resolvedAbs != rootResolved {
-		return "", fmt.Errorf("refusing to access symlink outside root: %s", reqPath)
-	}
-	return resolvedAbs, nil
-}
 
 func detectMIME(name string, sample []byte) string {
 	if ext := filepath.Ext(name); ext != "" {
