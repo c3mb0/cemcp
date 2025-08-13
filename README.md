@@ -11,6 +11,9 @@ A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mc
 - Directory listing and globbing with `**` for recursion
 - Concurrent content search with substring or regex matching
 - Optional debug logging to a specified file
+- Structured errors with operation context and numeric codes
+- Central configuration for tunable worker pools and size limits
+- Search statistics and binary-skipping for faster scans
 - Sane defaults to limit output: 64 KiB reads, 4 KiB peeks, 1000 list/glob entries, 100 search matches
 
 ## Installation
