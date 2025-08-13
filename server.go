@@ -12,11 +12,11 @@ func wrapTextHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFunc[TAr
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var args TArgs
 		if err := req.BindArguments(&args); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to bind arguments: %v", err)), nil
+			return nil, fmt.Errorf("failed to bind arguments: %w", err)
 		}
 		res, err := h(ctx, req, args)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("tool execution failed: %v", err)), nil
+			return nil, err
 		}
 		return mcp.NewToolResultText(format(res)), nil
 	}
