@@ -20,7 +20,7 @@ type MetaFields struct {
 // ReadArgs defines parameters for reading files
 type ReadArgs struct {
 	Path     string `json:"path" description:"File path or file:// URI within root"`
-	MaxBytes int    `json:"max_bytes,omitempty" description:"Maximum bytes to return (default 64KB)"`
+	MaxBytes int    `json:"max_bytes,omitempty" description:"Maximum bytes to return"`
 }
 
 // ReadResult contains file read operation results
@@ -37,8 +37,8 @@ type ReadResult struct {
 // PeekArgs defines parameters for peeking into files
 type PeekArgs struct {
 	Path     string `json:"path" description:"File path"`
-	Offset   int    `json:"offset,omitempty" description:"Byte offset to start at (default 0)"`
-	MaxBytes int    `json:"max_bytes,omitempty" description:"Window size in bytes (default 4KB)"`
+	Offset   int    `json:"offset,omitempty" description:"Byte offset to start at"`
+	MaxBytes int    `json:"max_bytes,omitempty" description:"Window size in bytes"`
 }
 
 // PeekResult contains file peek operation results
@@ -55,9 +55,9 @@ type PeekResult struct {
 type WriteArgs struct {
 	Path       string        `json:"path" description:"Target file path"`
 	Content    string        `json:"content" description:"Data to write"`
-	Strategy   writeStrategy `json:"strategy,omitempty" description:"Write behavior (default overwrite)"`
+	Strategy   writeStrategy `json:"strategy,omitempty" description:"Write strategy: overwrite, no_clobber, append, prepend, replace_range"`
 	CreateDirs *bool         `json:"create_dirs,omitempty" description:"Create parent directories if needed"`
-	Mode       string        `json:"mode,omitempty" description:"File mode in octal (e.g., 0644)"`
+	Mode       string        `json:"mode,omitempty" description:"File mode in octal, e.g. 0644"`
 	Start      *int          `json:"start,omitempty" description:"Start byte for replace_range strategy"`
 	End        *int          `json:"end,omitempty" description:"End byte (exclusive) for replace_range"`
 }
@@ -77,9 +77,9 @@ type WriteResult struct {
 type EditArgs struct {
 	Path    string `json:"path" description:"Target text file"`
 	Pattern string `json:"pattern" description:"Substring or regex to match"`
-	Replace string `json:"replace" description:"Replacement text"`
+	Replace string `json:"replace" description:"Replacement text; $1 etc. works in regex mode"`
 	Regex   bool   `json:"regex,omitempty" description:"Treat pattern as regex"`
-	Count   int    `json:"count,omitempty" description:"Max replacements (0=all)"`
+	Count   int    `json:"count,omitempty" description:"Maximum replacements; 0 means all"`
 }
 
 // EditResult contains file edit operation results
@@ -115,7 +115,7 @@ type ListResult struct {
 
 // GlobArgs defines parameters for glob pattern matching
 type GlobArgs struct {
-	Pattern    string `json:"pattern" description:"Glob pattern (supports ** for recursion)"`
+	Pattern    string `json:"pattern" description:"Glob pattern; ** enables recursion"`
 	MaxResults int    `json:"max_results,omitempty" description:"Maximum matches to return"`
 }
 
@@ -127,7 +127,7 @@ type GlobResult struct {
 // SearchArgs defines parameters for text search
 type SearchArgs struct {
 	Pattern    string `json:"pattern" description:"Text or regex pattern to find"`
-	Path       string `json:"path,omitempty" description:"Start directory (default root)"`
+	Path       string `json:"path,omitempty" description:"Start directory relative to root"`
 	Regex      bool   `json:"regex,omitempty" description:"Interpret pattern as regex"`
 	MaxResults int    `json:"max_results,omitempty" description:"Maximum matches to return"`
 }
@@ -143,4 +143,30 @@ type SearchMatch struct {
 type SearchResult struct {
 	Matches    []SearchMatch          `json:"matches" description:"Found matches"`
 	Statistics map[string]interface{} `json:"statistics,omitempty" description:"Search statistics"`
+}
+
+// MkdirArgs defines parameters for creating directories
+type MkdirArgs struct {
+	Path    string `json:"path" description:"Directory path to create"`
+	Parents bool   `json:"parents,omitempty" description:"Create parent directories if needed"`
+	Mode    string `json:"mode,omitempty" description:"Directory mode in octal"`
+}
+
+// MkdirResult contains directory creation results
+type MkdirResult struct {
+	Path    string `json:"path" description:"Directory path created"`
+	Created bool   `json:"created" description:"Whether directory was newly created"`
+	MetaFields
+}
+
+// RmdirArgs defines parameters for removing directories
+type RmdirArgs struct {
+	Path      string `json:"path" description:"Directory to remove"`
+	Recursive bool   `json:"recursive,omitempty" description:"Remove directory contents recursively"`
+}
+
+// RmdirResult contains directory removal results
+type RmdirResult struct {
+	Path    string `json:"path" description:"Directory removed"`
+	Removed bool   `json:"removed" description:"Whether directory was removed"`
 }
