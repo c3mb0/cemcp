@@ -25,7 +25,7 @@ func mustWrite(t *testing.T, p string, b []byte, mode os.FileMode) {
 
 func makeSymlink(t *testing.T, target, link string) error {
 	t.Helper()
-	// Windows often needs admin privileges for symlinks.
+    // Windows often requires admin privileges for symlinks.
 	if runtime.GOOS == "windows" {
 		return os.ErrPermission
 	}
@@ -43,7 +43,7 @@ func TestSafeJoin(t *testing.T) {
 		t.Fatalf("safeJoin failed: %v %q", err, p)
 	}
 
-	// Clean traversal that normalizes back inside root should be accepted
+    // A traversal that normalizes back inside the root should be accepted
 	tricky := filepath.ToSlash("../" + filepath.Base(root) + "/dir/file.txt")
 	if _, err := safeJoin(root, tricky); err != nil {
 		t.Fatalf("safeJoin rejected normalized path: %v", err)
@@ -54,7 +54,7 @@ func TestSafeJoin(t *testing.T) {
 		t.Fatalf("safeJoin allowed absolute escape")
 	}
 
-	// file:// URI support with percent‑encoded space
+    // File:// URI with a percent-encoded space
 	u := "file://" + strings.ReplaceAll(filepath.ToSlash(filepath.Join(root, "dir", "file space.txt")), " ", "%20")
 	mustWrite(t, filepath.Join(root, "dir", "file space.txt"), []byte("z"), 0o644)
 	if _, err := safeJoin(root, u); err != nil {
@@ -283,6 +283,19 @@ func TestHandleListAndGlob(t *testing.T) {
 	gres, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: "d/*.txt"})
 	if err != nil || len(gres.Matches) != 1 || gres.Matches[0] != "d/x.txt" {
 		t.Fatalf("glob wrong: %+v err=%v", gres, err)
+	}
+}
+
+func TestHandleGlobRecursive(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "a", "b", "c.txt"), []byte(""), 0o644)
+	gb := handleGlob(root)
+	res, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: "**/*.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Matches) != 1 || res.Matches[0] != "a/b/c.txt" {
+		t.Fatalf("recursive glob failed: %+v", res.Matches)
 	}
 }
 

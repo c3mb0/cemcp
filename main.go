@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -156,8 +157,8 @@ func procNameMatches(pid int, want string) bool {
 	return filepath.Base(exe) == want
 }
 
-// safeJoin ensures target is within root; resolves parent to avoid symlink escapes
-// NOTE: This version validates the parent path but does NOT resolve the final path.
+// safeJoin joins root and reqPath while keeping the result within root.
+// It validates the parent path but does not resolve the final element.
 // For read operations where following symlinks could escape the root, use safeJoinResolveFinal.
 func safeJoin(root, reqPath string) (string, error) {
 	if reqPath == "" {
@@ -201,8 +202,8 @@ func safeJoin(root, reqPath string) (string, error) {
 	return finalAbs, nil
 }
 
-// safeJoinResolveFinal resolves the final target (follows the last symlink) and ensures it stays under root.
-// This prevents read/peek from traversing a symlink inside the root that points outside the root.
+// safeJoinResolveFinal follows the last path element and ensures the target
+// stays within root. It guards read/peek from symlinks that jump outside.
 func safeJoinResolveFinal(root, reqPath string) (string, error) {
 	p, err := safeJoin(root, reqPath)
 	if err != nil {
@@ -1069,53 +1070,90 @@ func handleSearch(root string) mcp.StructuredToolHandlerFunc[SearchArgs, SearchR
 			dprintf("fs_search error: %v", err)
 			return out, err
 		}
-		errStop := errors.New("stop")
-		var matches []SearchMatch
-		_ = filepath.WalkDir(startPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			if d.IsDir() {
-				return nil
-			}
-			if d.Type()&os.ModeSymlink != 0 {
-				return nil
-			}
-			f, err := os.Open(path)
-			if err != nil {
-				return nil
-			}
-			defer f.Close()
-			scanner := bufio.NewScanner(f)
-			scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-			lineNo := 1
-			for scanner.Scan() {
-				txt := scanner.Text()
-				var ok bool
-				if rx != nil {
-					ok = rx.MatchString(txt)
-				} else {
-					ok = strings.Contains(txt, args.Pattern)
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		files := make(chan string, 64)
+		var walkErr error
+		var walkWG sync.WaitGroup
+		walkWG.Add(1)
+		go func() {
+			defer walkWG.Done()
+			walkErr = filepath.WalkDir(startPath, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return nil
 				}
-				if ok {
-					rel, _ := filepath.Rel(root, path)
-					matches = append(matches, SearchMatch{Path: filepath.ToSlash(rel), Line: lineNo, Text: txt})
-					if len(matches) >= max {
-						return errStop
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+				if d.IsDir() {
+					return nil
+				}
+				if d.Type()&os.ModeSymlink != 0 {
+					return nil
+				}
+				files <- path
+				return nil
+			})
+			close(files)
+		}()
+
+		var mu sync.Mutex
+		matches := []SearchMatch{}
+		workers := runtime.NumCPU()
+		var wg sync.WaitGroup
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for path := range files {
+					if ctx.Err() != nil {
+						return
+					}
+					f, err := os.Open(path)
+					if err != nil {
+						continue
+					}
+					scanner := bufio.NewScanner(f)
+					scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+					lineNo := 1
+					for scanner.Scan() {
+						txt := scanner.Text()
+						var ok bool
+						if rx != nil {
+							ok = rx.MatchString(txt)
+						} else {
+							ok = strings.Contains(txt, args.Pattern)
+						}
+						if ok {
+							rel, _ := filepath.Rel(root, path)
+							mu.Lock()
+							matches = append(matches, SearchMatch{Path: filepath.ToSlash(rel), Line: lineNo, Text: txt})
+							if len(matches) >= max {
+								mu.Unlock()
+								cancel()
+								f.Close()
+								return
+							}
+							mu.Unlock()
+						}
+						lineNo++
+					}
+					f.Close()
+					if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
+						continue
 					}
 				}
-				lineNo++
-			}
-			if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
-				return nil
-			}
-			return nil
-		})
+			}()
+		}
+		wg.Wait()
+		walkWG.Wait()
+		if walkErr != nil && !errors.Is(walkErr, context.Canceled) {
+			dprintf("fs_search error: %v", walkErr)
+			return out, walkErr
+		}
 		out.Matches = matches
 		dprintf("<- fs_search ok matches=%d dur=%s", len(out.Matches), time.Since(start))
 		return out, nil
@@ -1130,8 +1168,7 @@ func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult]
 		if args.Pattern == "" {
 			return out, errors.New("pattern required")
 		}
-		full, err := safeJoin(root, args.Pattern)
-		if err != nil {
+		if _, err := safeJoin(root, args.Pattern); err != nil {
 			dprintf("fs_glob error: %v", err)
 			return out, err
 		}
@@ -1139,17 +1176,79 @@ func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult]
 		if max <= 0 {
 			max = defaultGlobMaxResults
 		}
-		matches, err := filepath.Glob(full)
-		if err != nil {
+		pat := filepath.ToSlash(filepath.Clean(args.Pattern))
+		if _, err := doublestar.Match(pat, ""); err != nil {
 			dprintf("fs_glob error: %v", err)
 			return out, err
 		}
-		for _, m := range matches {
-			out.Matches = append(out.Matches, filepath.ToSlash(trimUnderRoot(root, m)))
-			if len(out.Matches) >= max {
-				break
-			}
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		paths := make(chan string, 64)
+		var walkErr error
+		var walkWG sync.WaitGroup
+		walkWG.Add(1)
+		go func() {
+			defer walkWG.Done()
+			walkErr = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return nil
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+				rel, err := filepath.Rel(root, path)
+				if err != nil {
+					return nil
+				}
+				paths <- filepath.ToSlash(rel)
+				return nil
+			})
+			close(paths)
+		}()
+
+		var mu sync.Mutex
+		matches := []string{}
+		workers := runtime.NumCPU()
+		var wg sync.WaitGroup
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for p := range paths {
+					if ctx.Err() != nil {
+						return
+					}
+					ok, err := doublestar.Match(pat, p)
+					if err != nil {
+						cancel()
+						return
+					}
+					if ok {
+						mu.Lock()
+						if len(matches) >= max {
+							mu.Unlock()
+							return
+						}
+						matches = append(matches, filepath.ToSlash(p))
+						if len(matches) >= max {
+							mu.Unlock()
+							cancel()
+							return
+						}
+						mu.Unlock()
+					}
+				}
+			}()
 		}
+		wg.Wait()
+		walkWG.Wait()
+		if walkErr != nil && !errors.Is(walkErr, context.Canceled) {
+			dprintf("fs_glob error: %v", walkErr)
+			return out, walkErr
+		}
+		out.Matches = matches
 		dprintf("<- fs_glob ok matches=%d dur=%s", len(out.Matches), time.Since(start))
 		return out, nil
 	}
@@ -1175,9 +1274,9 @@ func main() {
 
 	readTool := mcp.NewTool(
 		"fs_read",
-		mcp.WithDescription("Read a file up to a byte limit. Auto-detects encoding when omitted."),
-		mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI under root")),
-		mcp.WithString("encoding", mcp.Enum(string(encText), string(encBase64)), mcp.Description("Force text or base64. If empty, the server detects.")),
+		mcp.WithDescription("Read a file up to a byte limit. Detects encoding when unspecified."),
+		mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI within root")),
+		mcp.WithString("encoding", mcp.Enum(string(encText), string(encBase64)), mcp.Description("Force text or base64; auto-detected if empty")),
 		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Maximum bytes to return (default 64 KiB)")),
 		mcp.WithOutputSchema[ReadResult](),
 	)
@@ -1185,9 +1284,9 @@ func main() {
 
 	peekTool := mcp.NewTool(
 		"fs_peek",
-		mcp.WithDescription("Read a window of a file without loading it all"),
-		mcp.WithString("path", mcp.Required(), mcp.Description("File path to read")),
-		mcp.WithNumber("offset", mcp.Min(0), mcp.Description("Byte offset to start from (default 0)")),
+		mcp.WithDescription("Read a file window without loading the whole file"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("File path")),
+		mcp.WithNumber("offset", mcp.Min(0), mcp.Description("Byte offset to start at (default 0)")),
 		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Window size in bytes (default 4 KiB)")),
 		mcp.WithOutputSchema[PeekResult](),
 	)
@@ -1195,13 +1294,13 @@ func main() {
 
 	writeTool := mcp.NewTool(
 		"fs_write",
-		mcp.WithDescription("Create or modify a file using a chosen strategy"),
+		mcp.WithDescription("Create or modify a file using a strategy"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Target file path")),
-		mcp.WithString("encoding", mcp.Required(), mcp.Enum(string(encText), string(encBase64)), mcp.Description("Encoding of content: text or base64")),
+		mcp.WithString("encoding", mcp.Required(), mcp.Enum(string(encText), string(encBase64)), mcp.Description("Content encoding: text or base64")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Data to write")),
-		mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange)), mcp.Description("Write behavior; defaults to overwrite")),
-		mcp.WithBoolean("create_dirs", mcp.Description("Create parent directories when needed (default false)")),
-		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("File mode in octal. Omit to preserve existing")),
+		mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange)), mcp.Description("Write behavior (default overwrite)")),
+		mcp.WithBoolean("create_dirs", mcp.Description("Create parent directories if needed (default false)")),
+		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("File mode in octal; omit to keep existing")),
 		mcp.WithNumber("start", mcp.Min(0), mcp.Description("Start byte for replace_range")),
 		mcp.WithNumber("end", mcp.Min(0), mcp.Description("End byte (exclusive) for replace_range")),
 		mcp.WithOutputSchema[WriteResult](),
@@ -1213,9 +1312,9 @@ func main() {
 		mcp.WithDescription("Search and replace text in a file"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Target text file")),
 		mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to match")),
-		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text; $1 etc. in regex mode")),
-		mcp.WithBoolean("regex", mcp.Description("Treat pattern as regular expression")),
-		mcp.WithNumber("count", mcp.Min(0), mcp.Description("If >0, maximum replacements; 0 means replace all")),
+		mcp.WithString("replace", mcp.Required(), mcp.Description("Replacement text; supports $1 etc. in regex mode")),
+		mcp.WithBoolean("regex", mcp.Description("Treat pattern as a regular expression")),
+		mcp.WithNumber("count", mcp.Min(0), mcp.Description("If >0, maximum replacements; 0 replaces all")),
 		mcp.WithOutputSchema[EditResult](),
 	)
 	s.AddTool(editTool, mcp.NewStructuredToolHandler(handleEdit(root)))
@@ -1232,9 +1331,9 @@ func main() {
 
 	searchTool := mcp.NewTool(
 		"fs_search",
-		mcp.WithDescription("Search files for text"),
+		mcp.WithDescription("Search files recursively for text using concurrent workers"),
 		mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to find")),
-		mcp.WithString("path", mcp.Description("Optional start directory; defaults to root")),
+		mcp.WithString("path", mcp.Description("Start directory relative to root")),
 		mcp.WithBoolean("regex", mcp.Description("Interpret pattern as regular expression")),
 		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 100)")),
 		mcp.WithOutputSchema[SearchResult](),
@@ -1243,8 +1342,8 @@ func main() {
 
 	globTool := mcp.NewTool(
 		"fs_glob",
-		mcp.WithDescription("Glob for pathnames under the root"),
-		mcp.WithString("pattern", mcp.Required(), mcp.Description("Glob pattern")),
+		mcp.WithDescription("Match paths with shell-style globbing and ** for recursion"),
+		mcp.WithString("pattern", mcp.Required(), mcp.Description("Glob pattern relative to root")),
 		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return (default 1000)")),
 		mcp.WithOutputSchema[GlobResult](),
 	)
