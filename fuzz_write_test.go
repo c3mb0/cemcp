@@ -11,7 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// FuzzHandleWrite verifies that arbitrary inputs don't trigger panics.
+// FuzzHandleWrite ensures arbitrary inputs don't trigger panics.
 func FuzzHandleWrite(f *testing.F) {
 	f.Add("f.txt", []byte("seed"), false)
 	f.Fuzz(func(t *testing.T, path string, data []byte, useBase64 bool) {

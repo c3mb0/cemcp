@@ -19,7 +19,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 		t.Fatal(err)
 	}
 
-    // Disabled debug should return early
+	// Debug disabled should return early
 	*debugFlag = ""
 	debugEnabled = false
 	debugLog = nil
@@ -28,7 +28,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 		t.Fatalf("log should not exist when disabled")
 	}
 
-    // Error when creating the log file
+	// Error when creating the log file
 	os.Mkdir("log", 0o755)
 	*debugFlag = "log"
 	initDebug()
@@ -37,7 +37,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 	}
 	os.Remove("log")
 
-    // Successful run
+	// Successful run
 	initDebug()
 	dprintf("hello %s", "world")
 	data, err := os.ReadFile("log")
@@ -136,7 +136,7 @@ func TestAtomicWrite(t *testing.T) {
 	if err != nil || string(data) != "x" {
 		t.Fatalf("atomic write failed: %v %q", err, string(data))
 	}
-    // Rename should fail when the target is a directory
+	// Rename should fail when the target is a directory
 	targetDir := filepath.Join(dir, "sub")
 	os.Mkdir(targetDir, 0o755)
 	if err := atomicWrite(targetDir, []byte("x"), 0o600); err == nil {
