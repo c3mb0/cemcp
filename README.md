@@ -1,6 +1,6 @@
 # cemcp
 
-A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mcp-go). It exposes safe file operations under a configurable root for agent integration, prioritizing practical compatibility over strict spec minutiae.
+A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mcp-go). It exposes safe file operations under a configurable root for agent integration.
 
 ## Features
 
