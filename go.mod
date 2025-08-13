@@ -1,4 +1,4 @@
-module github.com/useinsider/cemcp
+module github.com/c3mb0/cemcp
 
 go 1.24.5
 
