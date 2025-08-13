@@ -16,7 +16,7 @@ A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mc
 ## Installation
 
 ```bash
-go install github.com/useinsider/cemcp@latest
+go install github.com/c3mb0/cemcp@latest
 ```
 
 ## Usage

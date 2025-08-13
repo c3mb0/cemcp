@@ -88,3 +88,12 @@ func safeJoinResolveFinal(root, reqPath string) (string, error) {
 	}
 	return resolvedAbs, nil
 }
+
+// trimUnderRoot returns p relative to root without a leading slash.
+// It normalizes separators and handles the case where root is "/".
+func trimUnderRoot(root, p string) string {
+	r := mustAbs(root)
+	r = strings.TrimSuffix(r, string(os.PathSeparator))
+	prefix := r + string(os.PathSeparator)
+	return strings.TrimPrefix(p, prefix)
+}
