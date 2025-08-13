@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -174,4 +175,31 @@ func TestLockStale(t *testing.T) {
 		t.Fatal(err)
 	}
 	release()
+}
+
+func TestCompatReadText(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "f.txt")
+	if err := os.WriteFile(p, []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	handler := wrapTextHandler(handleRead(root), formatReadResult)
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{"path": "f.txt"}}}
+	res, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StructuredContent != nil {
+		t.Fatalf("expected nil structured content")
+	}
+	if len(res.Content) != 1 {
+		t.Fatalf("expected one content item")
+	}
+	text, ok := res.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected text content")
+	}
+	if !strings.Contains(text.Text, "path=f.txt") {
+		t.Fatalf("unexpected text %q", text.Text)
+	}
 }
