@@ -1,4 +1,4 @@
-module github.com/c3mb0/cemcp/filesystem
+module github.com/c3mb0/cemcp/services/filesystem
 
 go 1.24.5
 
