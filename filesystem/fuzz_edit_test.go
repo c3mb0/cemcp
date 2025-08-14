@@ -17,9 +17,9 @@ import (
 // IMPORTANT: Do not call any *F methods from the fuzz target body; use t.* inside the callback.
 func FuzzEdit(f *testing.F) {
 	// Seeds
-	f.Add("foo bar baz", "ba.", "XX", true, 1)  // regex with dot
-	f.Add("aaaaa", "a", "b", false, 0)           // text replace all
-	f.Add("hello", "(unclosed", "x", true, 0)     // invalid regex (exercise error path)
+	f.Add("foo bar baz", "ba.", "XX", true, 1) // regex with dot
+	f.Add("aaaaa", "a", "b", false, 0)         // text replace all
+	f.Add("hello", "(unclosed", "x", true, 0)  // invalid regex (exercise error path)
 
 	f.Fuzz(func(t *testing.T, content, pattern, repl string, regex bool, count int) {
 		root := t.TempDir() // use t.* within the target body
@@ -29,4 +29,3 @@ func FuzzEdit(f *testing.F) {
 		_, _ = h(context.Background(), mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: pattern, Replace: repl, Regex: regex, Count: count})
 	})
 }
-
