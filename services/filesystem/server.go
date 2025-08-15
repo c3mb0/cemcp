@@ -22,6 +22,20 @@ func wrapTextHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFunc[TAr
 	}
 }
 
+func wrapStructuredHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFunc[TArgs, TResult]) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args TArgs
+		if err := req.BindArguments(&args); err != nil {
+			return nil, fmt.Errorf("failed to bind arguments: %w", err)
+		}
+		res, err := h(ctx, req, args)
+		if err != nil {
+			return nil, err
+		}
+		return &mcp.CallToolResult{StructuredContent: res}, nil
+	}
+}
+
 func setupServer(root string) *server.MCPServer {
 	s := server.NewMCPServer("fs-mcp-go", "0.1.0")
 
@@ -37,7 +51,7 @@ func setupServer(root string) *server.MCPServer {
 	if *compatFlag {
 		s.AddTool(readTool, wrapTextHandler(handleRead(root), formatReadResult))
 	} else {
-		s.AddTool(readTool, mcp.NewStructuredToolHandler(handleRead(root)))
+		s.AddTool(readTool, wrapStructuredHandler(handleRead(root)))
 	}
 
 	peekOpts := []mcp.ToolOption{
@@ -53,7 +67,7 @@ func setupServer(root string) *server.MCPServer {
 	if *compatFlag {
 		s.AddTool(peekTool, wrapTextHandler(handlePeek(root), formatPeekResult))
 	} else {
-		s.AddTool(peekTool, mcp.NewStructuredToolHandler(handlePeek(root)))
+		s.AddTool(peekTool, wrapStructuredHandler(handlePeek(root)))
 	}
 
 	writeOpts := []mcp.ToolOption{
@@ -73,7 +87,7 @@ func setupServer(root string) *server.MCPServer {
 	if *compatFlag {
 		s.AddTool(writeTool, wrapTextHandler(handleWrite(root), formatWriteResult))
 	} else {
-		s.AddTool(writeTool, mcp.NewStructuredToolHandler(handleWrite(root)))
+		s.AddTool(writeTool, wrapStructuredHandler(handleWrite(root)))
 	}
 
 	editOpts := []mcp.ToolOption{
@@ -91,7 +105,7 @@ func setupServer(root string) *server.MCPServer {
 	if *compatFlag {
 		s.AddTool(editTool, wrapTextHandler(handleEdit(root), formatEditResult))
 	} else {
-		s.AddTool(editTool, mcp.NewStructuredToolHandler(handleEdit(root)))
+		s.AddTool(editTool, wrapStructuredHandler(handleEdit(root)))
 	}
 
 	listOpts := []mcp.ToolOption{
@@ -107,7 +121,7 @@ func setupServer(root string) *server.MCPServer {
 	if *compatFlag {
 		s.AddTool(listTool, wrapTextHandler(handleList(root), formatListResult))
 	} else {
-		s.AddTool(listTool, mcp.NewStructuredToolHandler(handleList(root)))
+		s.AddTool(listTool, wrapStructuredHandler(handleList(root)))
 	}
 
 	searchOpts := []mcp.ToolOption{
@@ -124,7 +138,7 @@ func setupServer(root string) *server.MCPServer {
 	if *compatFlag {
 		s.AddTool(searchTool, wrapTextHandler(handleSearch(root), formatSearchResult))
 	} else {
-		s.AddTool(searchTool, mcp.NewStructuredToolHandler(handleSearch(root)))
+		s.AddTool(searchTool, wrapStructuredHandler(handleSearch(root)))
 	}
 
 	globOpts := []mcp.ToolOption{
@@ -139,7 +153,7 @@ func setupServer(root string) *server.MCPServer {
 	if *compatFlag {
 		s.AddTool(globTool, wrapTextHandler(handleGlob(root), formatGlobResult))
 	} else {
-		s.AddTool(globTool, mcp.NewStructuredToolHandler(handleGlob(root)))
+		s.AddTool(globTool, wrapStructuredHandler(handleGlob(root)))
 	}
 
 	mkdirOpts := []mcp.ToolOption{
@@ -155,7 +169,7 @@ func setupServer(root string) *server.MCPServer {
 	if *compatFlag {
 		s.AddTool(mkdirTool, wrapTextHandler(handleMkdir(root), formatMkdirResult))
 	} else {
-		s.AddTool(mkdirTool, mcp.NewStructuredToolHandler(handleMkdir(root)))
+		s.AddTool(mkdirTool, wrapStructuredHandler(handleMkdir(root)))
 	}
 
 	rmdirOpts := []mcp.ToolOption{
@@ -170,7 +184,7 @@ func setupServer(root string) *server.MCPServer {
 	if *compatFlag {
 		s.AddTool(rmdirTool, wrapTextHandler(handleRmdir(root), formatRmdirResult))
 	} else {
-		s.AddTool(rmdirTool, mcp.NewStructuredToolHandler(handleRmdir(root)))
+		s.AddTool(rmdirTool, wrapStructuredHandler(handleRmdir(root)))
 	}
 
 	return s
