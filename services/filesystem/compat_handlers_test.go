@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -25,5 +27,25 @@ func TestCompatWrapTextHandlerPropagatesErrors(t *testing.T) {
 	}
 	if res != nil {
 		t.Fatalf("expected nil result on error, got %v", res)
+	}
+}
+
+func TestStructuredHandlerOmitsTextContent(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "f.txt")
+	if err := os.WriteFile(p, []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := wrapStructuredHandler(handleRead(root))
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{"path": "f.txt"}}}
+	res, err := h(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StructuredContent == nil {
+		t.Fatalf("expected structured content")
+	}
+	if len(res.Content) != 0 {
+		t.Fatalf("expected no text content, got %v", res.Content)
 	}
 }
