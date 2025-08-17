@@ -1,6 +1,6 @@
 # filesystem
 
-A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mcp-go). It exposes safe file operations under a configurable root for agent integration.
+A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mcp-go). It exposes safe file operations inside a chosen base folder for agent integration.
 
 ## Features
 
@@ -25,20 +25,22 @@ go install github.com/c3mb0/cemcp/services/filesystem@latest
 ## Usage
 
 ```bash
-filesystem --root /path/to/workspace
+filesystem --root /path/to/folder
 ```
+
+Use the `--root` flag to pick the base folder where all actions occur.
 
 The server communicates over stdio; see `main.go` for tool definitions and flags.
 
 ### Agent guidance
 
-- All paths are resolved relative to the configured root; do not attempt `../` escapes.
+- All paths are resolved relative to the chosen base folder; do not attempt `../` escapes.
 - `fs_glob` uses shell-style patterns with `**` for recursion. Use `fs_search` or a `**` glob for recursive work.
 - Responses are structured JSON objects; clients must parse fields instead of expecting plain text.
 
 ## Tools
 
-Each tool operates only within the configured root directory.
+Each tool operates only within the chosen base folder.
 
 ### `fs_read`
 Read a file.
@@ -96,7 +98,7 @@ Search files for text using concurrent file scanning.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `pattern` | string | Substring or regex to find. |
-| `path` | string | Optional start directory (default root). |
+| `path` | string | Optional start directory (defaults to the base folder). |
 | `regex` | boolean | Interpret `pattern` as regex. |
 | `max_results` | number | Maximum matches to return (default 100). |
 
@@ -105,7 +107,7 @@ Match files using glob patterns. Supports `**` to span directories and runs conc
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `pattern` | string | Glob pattern relative to root. |
+| `pattern` | string | Glob pattern relative to the base folder. |
 | `max_results` | number | Maximum matches to return (default 1000). |
 
 ### Debug Logging
