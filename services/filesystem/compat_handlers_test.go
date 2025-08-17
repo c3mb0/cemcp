@@ -32,6 +32,23 @@ func TestCompatWrapTextHandlerPropagatesErrors(t *testing.T) {
 	}
 }
 
+// Test that wrapStructuredHandler propagates errors and returns no result.
+func TestStructuredHandlerPropagatesErrors(t *testing.T) {
+	root := t.TempDir()
+	h := wrapStructuredHandler(handleRead(root))
+
+	// Attempt to read path outside the root to force an error.
+	res, err := h(context.Background(), mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{"path": "../outside"}},
+	})
+	if err == nil {
+		t.Fatalf("expected error, got nil (res=%v)", res)
+	}
+	if res != nil {
+		t.Fatalf("expected nil result on error, got %v", res)
+	}
+}
+
 func TestStructuredHandlerOmitsTextContent(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "f.txt")
