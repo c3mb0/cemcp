@@ -86,7 +86,7 @@ func TestSafeJoinResolveFinal(t *testing.T) {
 		t.Fatalf("symlink: %v", err)
 	}
 	if _, err := safeJoinResolveFinal(root, "badlink"); err == nil {
-		t.Fatalf("expected error for symlink outside root")
+		t.Fatalf("expected error for symlink outside base folder")
 	}
 }
 

@@ -19,7 +19,7 @@ type MetaFields struct {
 
 // ReadArgs defines parameters for reading files
 type ReadArgs struct {
-	Path     string `json:"path" description:"File path or file:// URI within root"`
+	Path     string `json:"path" description:"File path or file:// URI within base folder"`
 	MaxBytes int    `json:"max_bytes,omitempty" description:"Maximum bytes to return"`
 }
 
@@ -100,7 +100,7 @@ type ListArgs struct {
 
 // ListEntry represents a single file/directory entry
 type ListEntry struct {
-	Path       string `json:"path" description:"Relative path from root"`
+	Path       string `json:"path" description:"Relative path from base folder"`
 	Name       string `json:"name" description:"Base filename"`
 	Kind       string `json:"kind" description:"Type: file/dir/symlink/other"`
 	Size       int64  `json:"size" description:"Size in bytes"`
@@ -127,14 +127,14 @@ type GlobResult struct {
 // SearchArgs defines parameters for text search
 type SearchArgs struct {
 	Pattern    string `json:"pattern" description:"Text or regex pattern to find"`
-	Path       string `json:"path,omitempty" description:"Start directory relative to root"`
+	Path       string `json:"path,omitempty" description:"Start directory relative to base folder"`
 	Regex      bool   `json:"regex,omitempty" description:"Interpret pattern as regex"`
 	MaxResults int    `json:"max_results,omitempty" description:"Maximum matches to return"`
 }
 
 // SearchMatch represents a single search result
 type SearchMatch struct {
-	Path string `json:"path" description:"File path relative to root"`
+	Path string `json:"path" description:"File path relative to base folder"`
 	Line int    `json:"line" description:"Line number of match"`
 	Text string `json:"text" description:"Matching line content"`
 }

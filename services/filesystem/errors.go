@@ -9,7 +9,7 @@ import (
 var (
 	// Path errors
 	ErrPathRequired    = errors.New("path is required")
-	ErrPathOutsideRoot = errors.New("path escapes root directory")
+	ErrPathOutsideRoot = errors.New("path escapes base folder")
 	ErrPathNotFound    = errors.New("path not found")
 	ErrPathIsSymlink   = errors.New("path is a symlink")
 	ErrPathIsDirectory = errors.New("path is a directory")

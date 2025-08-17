@@ -35,7 +35,7 @@ const (
 
 // Command-line flags
 var (
-	rootDirFlag     = flag.String("root", "", "filesystem root (defaults to CWD or $FS_ROOT)")
+	rootDirFlag     = flag.String("root", "", "filesystem base folder (defaults to the current working directory or $FS_ROOT)")
 	debugFlag       = flag.String("debug", "", "write debug logs to this file")
 	compatFlag      = flag.Bool("compat", false, "return tool results as plain text instead of JSON")
 	workersFlag     = flag.Int("workers", defaultWorkers, "number of worker threads (0=auto)")
@@ -57,13 +57,13 @@ type ServerConfig struct {
 func LoadConfig() (*ServerConfig, error) {
 	flag.Parse()
 
-	// Get root directory
+	// Determine base folder
 	root, err := getRoot()
 	if err != nil {
-		return nil, fmt.Errorf("failed to determine root directory: %w", err)
+		return nil, fmt.Errorf("failed to determine base folder: %w", err)
 	}
 
-	// Validate root directory
+	// Validate base folder
 	if err := validateRoot(root); err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func LoadConfig() (*ServerConfig, error) {
 // Validate checks configuration validity
 func (c *ServerConfig) Validate() error {
 	if c.Root == "" {
-		return fmt.Errorf("root directory is required")
+		return fmt.Errorf("base folder is required")
 	}
 
 	if c.Workers < 1 || c.Workers > maxWorkers {
@@ -115,11 +115,11 @@ func (c *ServerConfig) Validate() error {
 	return nil
 }
 
-// getRoot determines the root directory from flags/env/cwd
+// getRoot determines the base folder from flags/env/cwd
 func getRoot() (string, error) {
 	var base string
 
-	// Priority: flag > env > cwd
+	// Priority: flag > environment variable > current directory
 	if *rootDirFlag != "" {
 		base = mustAbs(*rootDirFlag)
 	} else if env := os.Getenv("FS_ROOT"); env != "" {
@@ -138,36 +138,36 @@ func getRoot() (string, error) {
 	} else {
 		// If symlink resolution fails, verify directory exists
 		if _, err := os.Stat(base); err != nil {
-			return "", fmt.Errorf("root directory does not exist: %w", err)
+			return "", fmt.Errorf("base folder does not exist: %w", err)
 		}
 	}
 
 	return base, nil
 }
 
-// validateRoot ensures the root directory is usable
+// validateRoot ensures the base folder is usable
 func validateRoot(root string) error {
 	info, err := os.Stat(root)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("root directory does not exist: %s", root)
+			return fmt.Errorf("base folder does not exist: %s", root)
 		}
-		return fmt.Errorf("cannot access root directory: %w", err)
+		return fmt.Errorf("cannot access base folder: %w", err)
 	}
 
 	if !info.IsDir() {
-		return fmt.Errorf("root path is not a directory: %s", root)
+		return fmt.Errorf("base path is not a directory: %s", root)
 	}
 
 	// Test read access
 	if _, err := os.ReadDir(root); err != nil {
-		return fmt.Errorf("cannot read root directory: %w", err)
+		return fmt.Errorf("cannot read base folder: %w", err)
 	}
 
 	// Test write access by creating a temp file
 	testFile := filepath.Join(root, ".mcp-test-"+fmt.Sprintf("%d", os.Getpid()))
 	if f, err := os.Create(testFile); err != nil {
-		dprintf("warning: root directory may not be writable: %v", err)
+		dprintf("warning: base folder may not be writable: %v", err)
 	} else {
 		f.Close()
 		os.Remove(testFile)

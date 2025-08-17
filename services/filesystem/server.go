@@ -41,7 +41,7 @@ func setupServer(root string) *server.MCPServer {
 
 	readOpts := []mcp.ToolOption{
 		mcp.WithDescription("Read a file up to a byte limit."),
-		mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI within root")),
+		mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI within base folder")),
 		mcp.WithNumber("max_bytes", mcp.Min(1), mcp.Description("Maximum bytes to return")),
 	}
 	if !*compatFlag {
@@ -127,7 +127,7 @@ func setupServer(root string) *server.MCPServer {
 	searchOpts := []mcp.ToolOption{
 		mcp.WithDescription("Search files recursively for text"),
 		mcp.WithString("pattern", mcp.Required(), mcp.Description("Substring or regex to find")),
-		mcp.WithString("path", mcp.Description("Start directory relative to root")),
+		mcp.WithString("path", mcp.Description("Start directory relative to base folder")),
 		mcp.WithBoolean("regex", mcp.Description("Interpret pattern as regular expression")),
 		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return")),
 	}
@@ -143,7 +143,7 @@ func setupServer(root string) *server.MCPServer {
 
 	globOpts := []mcp.ToolOption{
 		mcp.WithDescription("Match paths using shell-style globbing; ** enables recursion"),
-		mcp.WithString("pattern", mcp.Required(), mcp.Description("Glob pattern relative to root")),
+		mcp.WithString("pattern", mcp.Required(), mcp.Description("Glob pattern relative to base folder")),
 		mcp.WithNumber("max_results", mcp.Min(1), mcp.Description("Maximum matches to return")),
 	}
 	if !*compatFlag {
