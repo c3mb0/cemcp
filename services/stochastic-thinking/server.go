@@ -11,11 +11,38 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+type MDPParams struct {
+	Gamma  *float64 `json:"gamma"`
+	States *int     `json:"states"`
+}
+
+type MCTSParams struct {
+	Simulations         *int     `json:"simulations"`
+	ExplorationConstant *float64 `json:"explorationConstant"`
+}
+
+type BanditParams struct {
+	Strategy *string  `json:"strategy"`
+	Epsilon  *float64 `json:"epsilon"`
+}
+
+type BayesianParams struct {
+	AcquisitionFunction *string `json:"acquisitionFunction"`
+}
+
+type HMMParams struct {
+	Algorithm *string `json:"algorithm"`
+}
+
 type StochasticArgs struct {
-	Algorithm  string         `json:"algorithm"`
-	Problem    string         `json:"problem"`
-	Parameters map[string]any `json:"parameters"`
-	Result     string         `json:"result,omitempty"`
+	Algorithm string          `json:"algorithm"`
+	Problem   string          `json:"problem"`
+	MDP       *MDPParams      `json:"mdp,omitempty"`
+	MCTS      *MCTSParams     `json:"mcts,omitempty"`
+	Bandit    *BanditParams   `json:"bandit,omitempty"`
+	Bayesian  *BayesianParams `json:"bayesian,omitempty"`
+	HMM       *HMMParams      `json:"hmm,omitempty"`
+	Result    string          `json:"result,omitempty"`
 }
 
 func setupServer() *server.MCPServer {
@@ -32,7 +59,11 @@ Supports various algorithms including:
 - Hidden Markov Models (HMMs): Infer latent states affecting decision outcomes`),
 		mcp.WithString("algorithm", mcp.Required(), mcp.Enum("mdp", "mcts", "bandit", "bayesian", "hmm")),
 		mcp.WithString("problem", mcp.Required()),
-		mcp.WithObject("parameters", mcp.Required()),
+		mcp.WithObject("mdp"),
+		mcp.WithObject("mcts"),
+		mcp.WithObject("bandit"),
+		mcp.WithObject("bayesian"),
+		mcp.WithObject("hmm"),
 		mcp.WithString("result"),
 	)
 
@@ -46,105 +77,118 @@ Supports various algorithms including:
 			return out, nil
 		}
 
-		fmt.Fprintln(os.Stderr, formatOutput(args))
-		summary, missing, unknown := summaryForAlgorithm(args)
-		status := "success"
-		if len(missing) > 0 || len(unknown) > 0 {
-			status = "failed"
+		if err := validateArgs(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
 		}
+
+		fmt.Fprintln(os.Stderr, formatOutput(args))
+		summary, nextSteps := summaryForAlgorithm(args)
 		res := map[string]any{
-			"algorithm":         args.Algorithm,
-			"status":            status,
-			"summary":           summary,
-			"missingParameters": missing,
-			"unknownParameters": unknown,
-			"hasResult":         args.Result != "",
+			"algorithm": args.Algorithm,
+			"status":    "success",
+			"summary":   summary,
+			"hasResult": args.Result != "",
+			"nextSteps": nextSteps,
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		out := mcp.NewToolResultText(string(b))
-		if status == "failed" {
-			out.IsError = true
-		}
 		return out, nil
 	})
 
 	return s
 }
 
-func summaryForAlgorithm(a StochasticArgs) (string, []string, []string) {
-	expected := map[string][]string{
-		"mdp":      []string{"gamma", "states"},
-		"mcts":     []string{"simulations", "explorationConstant"},
-		"bandit":   []string{"strategy", "epsilon"},
-		"bayesian": []string{"acquisitionFunction"},
-		"hmm":      []string{"algorithm"},
-	}
-	required := expected[a.Algorithm]
-	var missing, unknown []string
-
-	for _, k := range required {
-		if _, ok := a.Parameters[k]; !ok {
-			missing = append(missing, k)
-		}
-	}
-	for k := range a.Parameters {
-		if !contains(required, k) {
-			unknown = append(unknown, k)
-		}
-	}
-	if len(missing) > 0 || len(unknown) > 0 {
-		return "", missing, unknown
-	}
-
+func summaryForAlgorithm(a StochasticArgs) (string, string) {
 	switch a.Algorithm {
 	case "mdp":
-		gamma := getNumber(a.Parameters["gamma"], 0.9)
-		states := getNumber(a.Parameters["states"], 0)
-		return fmt.Sprintf("Optimized policy over %v states with discount factor %v", states, gamma), nil, nil
+		gamma := *a.MDP.Gamma
+		states := *a.MDP.States
+		return fmt.Sprintf("Optimized policy over %v states with discount factor %v", states, gamma), "Evaluate the derived policy on new states to verify performance"
 	case "mcts":
-		sims := getNumber(a.Parameters["simulations"], 1000)
-		c := getNumber(a.Parameters["explorationConstant"], 1.4)
-		return fmt.Sprintf("Explored %v paths with exploration constant %v", sims, c), nil, nil
+		sims := *a.MCTS.Simulations
+		c := *a.MCTS.ExplorationConstant
+		return fmt.Sprintf("Explored %v paths with exploration constant %v", sims, c), "Run additional simulations or adjust the exploration constant for deeper search"
 	case "bandit":
-		strategy := getString(a.Parameters["strategy"], "epsilon-greedy")
-		eps := getNumber(a.Parameters["epsilon"], 0.1)
-		return fmt.Sprintf("Selected optimal arm with %s strategy (ε=%v)", strategy, eps), nil, nil
+		strategy := *a.Bandit.Strategy
+		eps := *a.Bandit.Epsilon
+		return fmt.Sprintf("Selected optimal arm with %s strategy (ε=%v)", strategy, eps), "Collect reward feedback and refine exploration parameters"
 	case "bayesian":
-		acq := getString(a.Parameters["acquisitionFunction"], "expected improvement")
-		return fmt.Sprintf("Optimized objective with %s acquisition", acq), nil, nil
+		acq := *a.Bayesian.AcquisitionFunction
+		return fmt.Sprintf("Optimized objective with %s acquisition", acq), "Consider more iterations or alternative acquisition functions"
 	case "hmm":
-		alg := getString(a.Parameters["algorithm"], "forward-backward")
-		return fmt.Sprintf("Inferred hidden states using %s algorithm", alg), nil, nil
+		alg := *a.HMM.Algorithm
+		return fmt.Sprintf("Inferred hidden states using %s algorithm", alg), "Analyze inferred states or tune model parameters"
 	default:
-		return "", nil, nil
+		return "", ""
 	}
 }
 
-func contains(arr []string, v string) bool {
-	for _, s := range arr {
-		if s == v {
-			return true
+func validateArgs(a *StochasticArgs) error {
+	switch a.Algorithm {
+	case "mdp":
+		if a.MDP == nil {
+			return fmt.Errorf("mdp parameters are required")
 		}
-	}
-	return false
-}
-
-func getNumber(v any, def float64) float64 {
-	switch n := v.(type) {
-	case float64:
-		return n
-	case int:
-		return float64(n)
+		var missing []string
+		if a.MDP.Gamma == nil {
+			missing = append(missing, "gamma")
+		}
+		if a.MDP.States == nil {
+			missing = append(missing, "states")
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("missing parameters: %s", strings.Join(missing, ", "))
+		}
+	case "mcts":
+		if a.MCTS == nil {
+			return fmt.Errorf("mcts parameters are required")
+		}
+		var missing []string
+		if a.MCTS.Simulations == nil {
+			missing = append(missing, "simulations")
+		}
+		if a.MCTS.ExplorationConstant == nil {
+			missing = append(missing, "explorationConstant")
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("missing parameters: %s", strings.Join(missing, ", "))
+		}
+	case "bandit":
+		if a.Bandit == nil {
+			return fmt.Errorf("bandit parameters are required")
+		}
+		var missing []string
+		if a.Bandit.Strategy == nil {
+			missing = append(missing, "strategy")
+		}
+		if a.Bandit.Epsilon == nil {
+			missing = append(missing, "epsilon")
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("missing parameters: %s", strings.Join(missing, ", "))
+		}
+	case "bayesian":
+		if a.Bayesian == nil {
+			return fmt.Errorf("bayesian parameters are required")
+		}
+		if a.Bayesian.AcquisitionFunction == nil {
+			return fmt.Errorf("missing parameters: acquisitionFunction")
+		}
+	case "hmm":
+		if a.HMM == nil {
+			return fmt.Errorf("hmm parameters are required")
+		}
+		if a.HMM.Algorithm == nil {
+			return fmt.Errorf("missing parameters: algorithm")
+		}
 	default:
-		return def
+		return fmt.Errorf("unknown algorithm: %s", a.Algorithm)
 	}
-}
-
-func getString(v any, def string) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return def
+	return nil
 }
 
 func formatOutput(a StochasticArgs) string {
@@ -156,7 +200,49 @@ func formatOutput(a StochasticArgs) string {
 	fmt.Fprintf(b, "│ Problem: %s\n", a.Problem)
 	fmt.Fprintf(b, "├%s┤\n", border)
 	fmt.Fprintf(b, "│ Parameters:\n")
-	for k, v := range a.Parameters {
+	params := map[string]any{}
+	switch a.Algorithm {
+	case "mdp":
+		if a.MDP != nil {
+			if a.MDP.Gamma != nil {
+				params["gamma"] = *a.MDP.Gamma
+			}
+			if a.MDP.States != nil {
+				params["states"] = *a.MDP.States
+			}
+		}
+	case "mcts":
+		if a.MCTS != nil {
+			if a.MCTS.Simulations != nil {
+				params["simulations"] = *a.MCTS.Simulations
+			}
+			if a.MCTS.ExplorationConstant != nil {
+				params["explorationConstant"] = *a.MCTS.ExplorationConstant
+			}
+		}
+	case "bandit":
+		if a.Bandit != nil {
+			if a.Bandit.Strategy != nil {
+				params["strategy"] = *a.Bandit.Strategy
+			}
+			if a.Bandit.Epsilon != nil {
+				params["epsilon"] = *a.Bandit.Epsilon
+			}
+		}
+	case "bayesian":
+		if a.Bayesian != nil {
+			if a.Bayesian.AcquisitionFunction != nil {
+				params["acquisitionFunction"] = *a.Bayesian.AcquisitionFunction
+			}
+		}
+	case "hmm":
+		if a.HMM != nil {
+			if a.HMM.Algorithm != nil {
+				params["algorithm"] = *a.HMM.Algorithm
+			}
+		}
+	}
+	for k, v := range params {
 		fmt.Fprintf(b, "│ • %s: %v\n", k, v)
 	}
 	if a.Result != "" {
