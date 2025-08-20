@@ -146,6 +146,18 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			out.IsError = true
 			return out, nil
 		}
+
+		expectedThoughtNumber := len(state.GetThoughts()) + 1
+		if args.ThoughtNumber != expectedThoughtNumber {
+			res := map[string]any{
+				"thought":               args.Thought,
+				"thoughtNumber":         args.ThoughtNumber,
+				"expectedThoughtNumber": expectedThoughtNumber,
+				"status":                "out_of_order",
+			}
+			b, _ := json.MarshalIndent(res, "", "  ")
+			return mcp.NewToolResultText(string(b)), nil
+		}
 		if args.BranchID != nil {
 			if err := state.RegisterBranch(*args.BranchID, args.BranchFromThought); err != nil {
 				errResp := map[string]any{"error": err.Error(), "status": "failed"}
@@ -160,16 +172,17 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 		all := state.GetThoughts()
 		recent := lastThoughts(all, 3)
 		res := map[string]any{
-			"thought":           args.Thought,
-			"thoughtNumber":     args.ThoughtNumber,
-			"totalThoughts":     args.TotalThoughts,
-			"nextThoughtNeeded": args.NextThoughtNeeded,
-			"isRevision":        args.IsRevision,
-			"revisesThought":    args.RevisesThought,
-			"branchFromThought": args.BranchFromThought,
-			"branchId":          args.BranchID,
-			"needsMoreThoughts": args.NeedsMoreThoughts,
-			"status":            map[bool]string{true: "success", false: "limit_reached"}[added],
+			"thought":               args.Thought,
+			"thoughtNumber":         args.ThoughtNumber,
+			"expectedThoughtNumber": expectedThoughtNumber,
+			"totalThoughts":         args.TotalThoughts,
+			"nextThoughtNeeded":     args.NextThoughtNeeded,
+			"isRevision":            args.IsRevision,
+			"revisesThought":        args.RevisesThought,
+			"branchFromThought":     args.BranchFromThought,
+			"branchId":              args.BranchID,
+			"needsMoreThoughts":     args.NeedsMoreThoughts,
+			"status":                map[bool]string{true: "success", false: "limit_reached"}[added],
 			"sessionContext": map[string]any{
 				"sessionId":         state.SessionID(),
 				"totalThoughts":     len(all),
