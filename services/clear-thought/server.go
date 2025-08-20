@@ -71,6 +71,7 @@ func (s *SessionState) GetRemainingThoughts() int {
 	return s.config.MaxThoughtsPerSession - len(s.thoughts)
 }
 
+// RetractThought removes the most recent thought and reports whether a thought was retracted.
 func (s *SessionState) RetractThought() (*ThoughtData, bool) {
 	if len(s.thoughts) == 0 {
 		return nil, false
