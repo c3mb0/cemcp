@@ -165,12 +165,10 @@ func registerRetractThought(srv *server.MCPServer, state *SessionState) {
 	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		removed, ok := state.RetractThought()
 		res := map[string]any{
-			"status": map[bool]string{true: "success", false: "no_thoughts"}[ok],
-			"sessionContext": map[string]any{
-				"sessionId":         state.SessionID(),
-				"totalThoughts":     len(state.GetThoughts()),
-				"remainingThoughts": state.GetRemainingThoughts(),
-			},
+			"status":            map[bool]string{true: "success", false: "no_thoughts"}[ok],
+			"sessionId":         state.SessionID(),
+			"totalThoughts":     len(state.GetThoughts()),
+			"remainingThoughts": state.GetRemainingThoughts(),
 		}
 		if ok {
 			res["removedThoughtNumber"] = removed.ThoughtNumber

@@ -5,7 +5,7 @@ A lightweight session memory service built with [MCP-Go](https://github.com/mark
 ## Tools
 
 - `sequentialthinking` – record a thought with branching and revision metadata.
-- `retractthought` – remove the most recent thought from session memory.
+- `retractthought` – remove the most recent thought and report updated totals and remaining capacity.
 - `mentalmodel` – log a mental model used to analyze a problem.
 - `debuggingapproach` – capture a systematic debugging session.
 
