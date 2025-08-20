@@ -22,11 +22,11 @@ func TestCompatWrapTextHandlerPropagatesErrors(t *testing.T) {
 	res, err := h(context.Background(), mcp.CallToolRequest{
 		Params: mcp.CallToolParams{Arguments: map[string]any{"path": "../outside"}},
 	})
-	if err == nil {
-		t.Fatalf("expected error, got nil (res=%v)", res)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if res != nil {
-		t.Fatalf("expected nil result on error, got %v", res)
+	if res == nil || !res.IsError {
+		t.Fatalf("expected error result, got %v", res)
 	}
 }
 

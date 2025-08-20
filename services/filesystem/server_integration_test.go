@@ -13,7 +13,7 @@ import (
 func TestWriteReadIntegration(t *testing.T) {
 	root := t.TempDir()
 	srv, err := mcptest.NewServer(t,
-		server.ServerTool{Tool: mcp.NewTool("fs_write"), Handler: mcp.NewStructuredToolHandler(handleWrite(root))},
+		server.ServerTool{Tool: mcp.NewTool("fs_write"), Handler: wrapStructuredHandler(handleWrite(root))},
 		server.ServerTool{Tool: mcp.NewTool("fs_read"), Handler: mcp.NewStructuredToolHandler(handleRead(root))},
 	)
 	if err != nil {
@@ -51,5 +51,30 @@ func TestWriteReadIntegration(t *testing.T) {
 	}
 	if rr.Content != "hello" {
 		t.Fatalf("expected content hello, got %q", rr.Content)
+	}
+}
+
+func TestWriteErrorResponse(t *testing.T) {
+	root := t.TempDir()
+	srv, err := mcptest.NewServer(t,
+		server.ServerTool{Tool: mcp.NewTool("fs_write", mcp.WithOutputSchema[WriteResult]()), Handler: wrapStructuredHandler(handleWrite(root))},
+	)
+	if err != nil {
+		t.Fatalf("server start failed: %v", err)
+	}
+	defer srv.Close()
+
+	res, err := srv.Client().CallTool(context.Background(), mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Name: "fs_write", Arguments: map[string]any{
+			"path":     "f.txt",
+			"content":  "x",
+			"strategy": "bogus",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("call failed: %v", err)
+	}
+	if !res.IsError {
+		t.Fatalf("expected IsError result")
 	}
 }

@@ -224,10 +224,6 @@ func TestHandleWriteErrors(t *testing.T) {
 	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Strategy: "bogus", Content: "x"}); err == nil {
 		t.Fatalf("expected strategy error")
 	}
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "dir/file.txt", Content: "x", CreateDirs: boolPtr(false)}); err == nil {
-		t.Fatalf("expected missing dir error")
-	}
-
 	// append to directory should error
 	os.Mkdir(filepath.Join(root, "adir"), 0o755)
 	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "adir", Content: "x", Strategy: strategyAppend}); err == nil {

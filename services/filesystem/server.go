@@ -16,7 +16,10 @@ func wrapTextHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFunc[TAr
 		}
 		res, err := h(ctx, req, args)
 		if err != nil {
-			return nil, err
+			errResp := toErrorResponse(err)
+			out := mcp.NewToolResultStructured(errResp, errResp.Error)
+			out.IsError = true
+			return out, nil
 		}
 		return mcp.NewToolResultText(format(res)), nil
 	}
@@ -30,7 +33,10 @@ func wrapStructuredHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFu
 		}
 		res, err := h(ctx, req, args)
 		if err != nil {
-			return nil, err
+			errResp := toErrorResponse(err)
+			out := mcp.NewToolResultStructured(errResp, errResp.Error)
+			out.IsError = true
+			return out, nil
 		}
 		return &mcp.CallToolResult{StructuredContent: res}, nil
 	}
@@ -75,7 +81,6 @@ func setupServer(root string) *server.MCPServer {
 		mcp.WithString("path", mcp.Required(), mcp.Description("Target file path")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Data to write")),
 		mcp.WithString("strategy", mcp.Enum(string(strategyOverwrite), string(strategyNoClobber), string(strategyAppend), string(strategyPrepend), string(strategyReplaceRange)), mcp.Description("Write strategy: overwrite, no_clobber, append, prepend, replace_range")),
-		mcp.WithBoolean("create_dirs", mcp.Description("Create parent directories if needed")),
 		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("File mode in octal, keep existing if omitted")),
 		mcp.WithNumber("start", mcp.Min(0), mcp.Description("Start byte for replace_range")),
 		mcp.WithNumber("end", mcp.Min(0), mcp.Description("End byte (exclusive) for replace_range")),
@@ -159,7 +164,6 @@ func setupServer(root string) *server.MCPServer {
 	mkdirOpts := []mcp.ToolOption{
 		mcp.WithDescription("Create a directory"),
 		mcp.WithString("path", mcp.Required(), mcp.Description("Directory path to create")),
-		mcp.WithBoolean("parents", mcp.Description("Create parent directories if needed")),
 		mcp.WithString("mode", mcp.Pattern("^0?[0-7]{3,4}$"), mcp.Description("Directory mode in octal")),
 	}
 	if !*compatFlag {

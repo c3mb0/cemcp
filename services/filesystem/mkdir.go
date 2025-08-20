@@ -16,7 +16,7 @@ func formatMkdirResult(r MkdirResult) string {
 func handleMkdir(root string) mcp.StructuredToolHandlerFunc[MkdirArgs, MkdirResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args MkdirArgs) (MkdirResult, error) {
 		start := time.Now()
-		dprintf("-> fs_mkdir path=%q parents=%v mode=%s", args.Path, args.Parents, args.Mode)
+		dprintf("-> fs_mkdir path=%q mode=%s", args.Path, args.Mode)
 		var out MkdirResult
 		full, err := safeJoin(root, args.Path)
 		if err != nil {
@@ -38,16 +38,9 @@ func handleMkdir(root string) mcp.StructuredToolHandlerFunc[MkdirArgs, MkdirResu
 				return out, fmt.Errorf("exists and not a directory: %s", args.Path)
 			}
 		} else if os.IsNotExist(err) {
-			if args.Parents {
-				if err := os.MkdirAll(full, mode); err != nil {
-					dprintf("fs_mkdir MkdirAll error: %v", err)
-					return out, err
-				}
-			} else {
-				if err := os.Mkdir(full, mode); err != nil {
-					dprintf("fs_mkdir Mkdir error: %v", err)
-					return out, err
-				}
+			if err := os.MkdirAll(full, mode); err != nil {
+				dprintf("fs_mkdir MkdirAll error: %v", err)
+				return out, err
 			}
 			created = true
 		} else {

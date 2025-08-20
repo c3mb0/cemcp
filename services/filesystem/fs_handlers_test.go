@@ -12,7 +12,7 @@ import (
 func TestWrite_PathAndMode(t *testing.T) {
 	root := t.TempDir()
 	wr := handleWrite(root)
-	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "m/sub/file.txt", Content: "hello", Mode: "0640", CreateDirs: boolPtr(true)})
+	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "m/sub/file.txt", Content: "hello", Mode: "0640"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,5 +27,3 @@ func TestWrite_PathAndMode(t *testing.T) {
 		t.Fatalf("mode mismatch: %o", st.Mode()&0o777)
 	}
 }
-
-func boolPtr(b bool) *bool { return &b }
