@@ -105,6 +105,13 @@ func (s *SessionState) GetDebuggingSessions() []DebuggingApproachData { return s
 
 func (s *SessionState) SessionID() string { return s.sessionID }
 
+func (s *SessionState) Reset() {
+	s.thoughts = nil
+	s.mentalModels = nil
+	s.debuggingSessions = nil
+	s.branches = make(map[string]*int)
+}
+
 func (s *SessionState) UpdateThought(num int, text string) (*ThoughtData, bool) {
 	for i := range s.thoughts {
 		if s.thoughts[i].ThoughtNumber == num {
@@ -129,6 +136,7 @@ func setupServer() *server.MCPServer {
 	registerGetThoughts(s, session)
 	registerGetMentalModels(s, session)
 	registerGetDebuggingSessions(s, session)
+	registerResetSession(s, session)
 
 	return s
 }
@@ -498,6 +506,24 @@ func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
 			"offset":            off,
 			"limit":             lim,
 			"debuggingSessions": items,
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerResetSession(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"resetsession",
+		mcp.WithDescription("Clear all stored thoughts, mental models, and debugging sessions"),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		state.Reset()
+		res := map[string]any{
+			"status":            "success",
+			"sessionId":         state.SessionID(),
+			"remainingThoughts": state.GetRemainingThoughts(),
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
