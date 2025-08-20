@@ -196,5 +196,26 @@ func setupServer(root string) *server.MCPServer {
 		s.AddTool(rmdirTool, wrapStructuredHandler(handleRmdir(root)))
 	}
 
+	dbgApproachOpts := []mcp.ToolOption{
+		mcp.WithDescription("Record debugging approach and resolution"),
+		mcp.WithString("session", mcp.Description("Existing session identifier")),
+		mcp.WithString("approach", mcp.Required(), mcp.Description("Debugging steps taken")),
+		mcp.WithString("resolution", mcp.Description("Outcome or fix applied")),
+	}
+	if !*compatFlag {
+		dbgApproachOpts = append(dbgApproachOpts, mcp.WithOutputSchema[DebuggingApproachResult]())
+	}
+	dbgApproachTool := mcp.NewTool("debuggingapproach", dbgApproachOpts...)
+	s.AddTool(dbgApproachTool, wrapStructuredHandler(handleDebuggingApproach()))
+
+	pendingOpts := []mcp.ToolOption{
+		mcp.WithDescription("List unresolved debugging sessions"),
+	}
+	if !*compatFlag {
+		pendingOpts = append(pendingOpts, mcp.WithOutputSchema[PendingDebugResult]())
+	}
+	pendingTool := mcp.NewTool("pendingdebug", pendingOpts...)
+	s.AddTool(pendingTool, wrapStructuredHandler(handlePendingDebug()))
+
 	return s
 }
