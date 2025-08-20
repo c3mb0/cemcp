@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sort"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -52,10 +54,32 @@ type SessionState struct {
 	thoughts          []ThoughtData
 	mentalModels      []MentalModelData
 	debuggingSessions []DebuggingApproachData
+	branches          map[string]*int
 }
 
 func NewSessionState(id string, cfg ServerConfig) *SessionState {
-	return &SessionState{sessionID: id, config: cfg}
+	return &SessionState{sessionID: id, config: cfg, branches: make(map[string]*int)}
+}
+
+func (s *SessionState) RegisterBranch(id string, from *int) error {
+	if existing, ok := s.branches[id]; ok {
+		switch {
+		case existing == nil && from != nil:
+			return fmt.Errorf("branchId collision for %s", id)
+		case existing != nil && from == nil:
+			return fmt.Errorf("branchId collision for %s", id)
+		case existing != nil && from != nil && *existing != *from:
+			return fmt.Errorf("branchId collision for %s", id)
+		}
+	} else {
+		if from != nil {
+			v := *from
+			s.branches[id] = &v
+		} else {
+			s.branches[id] = nil
+		}
+	}
+	return nil
 }
 
 func (s *SessionState) AddThought(t ThoughtData) bool {
@@ -88,6 +112,7 @@ func setupServer() *server.MCPServer {
 	session := NewSessionState("default", defaultConfig)
 
 	registerSequentialThinking(s, session)
+	registerGetBranch(s, session)
 	registerMentalModel(s, session)
 	registerDebuggingApproach(s, session)
 
@@ -118,6 +143,15 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			out.IsError = true
 			return out, nil
 		}
+		if args.BranchID != nil {
+			if err := state.RegisterBranch(*args.BranchID, args.BranchFromThought); err != nil {
+				errResp := map[string]any{"error": err.Error(), "status": "failed"}
+				b, _ := json.MarshalIndent(errResp, "", "  ")
+				out := mcp.NewToolResultText(string(b))
+				out.IsError = true
+				return out, nil
+			}
+		}
 
 		added := state.AddThought(args)
 		all := state.GetThoughts()
@@ -139,6 +173,49 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 				"remainingThoughts": state.GetRemainingThoughts(),
 				"recentThoughts":    recent,
 			},
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerGetBranch(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"getbranch",
+		mcp.WithDescription("Retrieve the sequence of thoughts for a given branch"),
+		mcp.WithString("branchId", mcp.Required(), mcp.Description("Branch identifier")),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			BranchID string `json:"branchId"`
+		}
+		if err := req.BindArguments(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		history := branchHistory(state.GetThoughts(), args.BranchID)
+		seq := make([]map[string]any, 0, len(history))
+		mergePoints := make([]int, 0)
+		for _, t := range history {
+			item := map[string]any{
+				"thoughtNumber": t.ThoughtNumber,
+				"thought":       t.Thought,
+			}
+			if t.BranchFromThought != nil {
+				mergePoints = append(mergePoints, *t.BranchFromThought)
+				item["mergeFromThought"] = *t.BranchFromThought
+			}
+			seq = append(seq, item)
+		}
+		res := map[string]any{
+			"branchId":    args.BranchID,
+			"thoughts":    seq,
+			"mergePoints": mergePoints,
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
@@ -272,4 +349,23 @@ func lastDebugging(list []DebuggingApproachData, n int) []map[string]any {
 		})
 	}
 	return out
+}
+
+func groupThoughtsByBranchID(thoughts []ThoughtData) map[string][]ThoughtData {
+	groups := make(map[string][]ThoughtData)
+	for _, t := range thoughts {
+		if t.BranchID == nil {
+			continue
+		}
+		id := *t.BranchID
+		groups[id] = append(groups[id], t)
+	}
+	return groups
+}
+
+func branchHistory(thoughts []ThoughtData, branchID string) []ThoughtData {
+	groups := groupThoughtsByBranchID(thoughts)
+	branch := groups[branchID]
+	sort.Slice(branch, func(i, j int) bool { return branch[i].ThoughtNumber < branch[j].ThoughtNumber })
+	return branch
 }
