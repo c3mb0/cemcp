@@ -34,7 +34,7 @@ func setupServer() *server.MCPServer {
 
 	s.AddTool(specTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		specs := algorithmSpecs()
-		return &mcp.CallToolResult{StructuredContent: specs}, nil
+		return mcp.NewToolResultStructured(specs, ""), nil
 	})
 
 	tool := mcp.NewTool(
