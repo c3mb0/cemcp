@@ -35,3 +35,24 @@ func TestMkdirAndRmdir(t *testing.T) {
 		t.Fatalf("directory not removed: %v", err)
 	}
 }
+
+func TestMkdirBraceExpansion(t *testing.T) {
+	root := t.TempDir()
+	mk := handleMkdir(root)
+	pattern := "internal/agents/{dev,test,automation,security,uat}"
+	res, err := mk(context.Background(), mcp.CallToolRequest{}, MkdirArgs{Path: pattern})
+	if err != nil {
+		t.Fatalf("mkdir brace expansion failed: %v", err)
+	}
+	if !res.Created {
+		t.Fatalf("expected Created=true, got %+v", res)
+	}
+	dirs := []string{"dev", "test", "automation", "security", "uat"}
+	for _, d := range dirs {
+		p := filepath.Join(root, "internal", "agents", d)
+		info, err := os.Stat(p)
+		if err != nil || !info.IsDir() {
+			t.Fatalf("directory %s not created: %v", d, err)
+		}
+	}
+}

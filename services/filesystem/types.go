@@ -146,7 +146,7 @@ type SearchResult struct {
 
 // MkdirArgs defines parameters for creating directories
 type MkdirArgs struct {
-	Path string `json:"path" description:"Directory path to create"`
+	Path string `json:"path" description:"Directory path to create; supports brace expansion"`
 	Mode string `json:"mode,omitempty" description:"Directory mode in octal"`
 }
 

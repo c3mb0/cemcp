@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -12,7 +11,10 @@ func wrapTextHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFunc[TAr
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var args TArgs
 		if err := req.BindArguments(&args); err != nil {
-			return nil, fmt.Errorf("failed to bind arguments: %w", err)
+			errResp := toErrorResponse(err)
+			out := mcp.NewToolResultStructured(errResp, errResp.Error)
+			out.IsError = true
+			return out, nil
 		}
 		res, err := h(ctx, req, args)
 		if err != nil {
@@ -29,7 +31,10 @@ func wrapStructuredHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFu
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var args TArgs
 		if err := req.BindArguments(&args); err != nil {
-			return nil, fmt.Errorf("failed to bind arguments: %w", err)
+			errResp := toErrorResponse(err)
+			out := mcp.NewToolResultStructured(errResp, errResp.Error)
+			out.IsError = true
+			return out, nil
 		}
 		res, err := h(ctx, req, args)
 		if err != nil {
