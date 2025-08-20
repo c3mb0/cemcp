@@ -14,6 +14,7 @@ func wrapTextHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFunc[TAr
 			errResp := toErrorResponse(err)
 			out := mcp.NewToolResultStructured(errResp, errResp.Error)
 			out.IsError = true
+			attachSessionContext(ctx, out)
 			return out, nil
 		}
 		res, err := h(ctx, req, args)
@@ -21,9 +22,12 @@ func wrapTextHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFunc[TAr
 			errResp := toErrorResponse(err)
 			out := mcp.NewToolResultStructured(errResp, errResp.Error)
 			out.IsError = true
+			attachSessionContext(ctx, out)
 			return out, nil
 		}
-		return mcp.NewToolResultText(format(res)), nil
+		result := mcp.NewToolResultText(format(res))
+		attachSessionContext(ctx, result)
+		return result, nil
 	}
 }
 
@@ -34,6 +38,7 @@ func wrapStructuredHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFu
 			errResp := toErrorResponse(err)
 			out := mcp.NewToolResultStructured(errResp, errResp.Error)
 			out.IsError = true
+			attachSessionContext(ctx, out)
 			return out, nil
 		}
 		res, err := h(ctx, req, args)
@@ -41,9 +46,12 @@ func wrapStructuredHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFu
 			errResp := toErrorResponse(err)
 			out := mcp.NewToolResultStructured(errResp, errResp.Error)
 			out.IsError = true
+			attachSessionContext(ctx, out)
 			return out, nil
 		}
-		return &mcp.CallToolResult{StructuredContent: res}, nil
+		result := &mcp.CallToolResult{StructuredContent: res}
+		attachSessionContext(ctx, result)
+		return result, nil
 	}
 }
 
@@ -194,6 +202,37 @@ func setupServer(root string) *server.MCPServer {
 		s.AddTool(rmdirTool, wrapTextHandler(handleRmdir(root), formatRmdirResult))
 	} else {
 		s.AddTool(rmdirTool, wrapStructuredHandler(handleRmdir(root)))
+	}
+
+	addGoalOpts := []mcp.ToolOption{
+		mcp.WithDescription("Append a new goal to the session"),
+		mcp.WithString("description", mcp.Required(), mcp.Description("Goal description")),
+		mcp.WithString("notes", mcp.Description("Optional notes for the goal")),
+	}
+	if !*compatFlag {
+		addGoalOpts = append(addGoalOpts, mcp.WithOutputSchema[AddGoalResult]())
+	}
+	addGoalTool := mcp.NewTool("addgoal", addGoalOpts...)
+	if *compatFlag {
+		s.AddTool(addGoalTool, wrapTextHandler(handleAddGoal(), formatAddGoalResult))
+	} else {
+		s.AddTool(addGoalTool, wrapStructuredHandler(handleAddGoal()))
+	}
+
+	updateGoalOpts := []mcp.ToolOption{
+		mcp.WithDescription("Update an existing goal's status or notes"),
+		mcp.WithNumber("index", mcp.Required(), mcp.Description("Index of the goal to update")),
+		mcp.WithBoolean("completed", mcp.Description("Mark the goal as completed")),
+		mcp.WithString("notes", mcp.Description("Replace goal notes")),
+	}
+	if !*compatFlag {
+		updateGoalOpts = append(updateGoalOpts, mcp.WithOutputSchema[UpdateGoalResult]())
+	}
+	updateGoalTool := mcp.NewTool("updategoal", updateGoalOpts...)
+	if *compatFlag {
+		s.AddTool(updateGoalTool, wrapTextHandler(handleUpdateGoal(), formatUpdateGoalResult))
+	} else {
+		s.AddTool(updateGoalTool, wrapStructuredHandler(handleUpdateGoal()))
 	}
 
 	return s
