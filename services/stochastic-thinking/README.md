@@ -4,6 +4,8 @@
 
 ## Algorithms and required parameters
 
+Parameters are supplied in an object named after the selected algorithm:
+
 | Algorithm | Required parameters |
 |-----------|--------------------|
 | `mdp`     | `gamma`, `states` |
@@ -12,11 +14,14 @@
 | `bayesian`| `acquisitionFunction` |
 | `hmm`     | `algorithm` |
 
+If any required parameter is missing, the request fails with an error before the algorithm runs.
+
 ## Response fields
 
-The tool returns additional fields to help validate requests:
+The tool returns the following fields:
 
-- `missingParameters` – parameters required for the selected algorithm that were not provided
-- `unknownParameters` – parameters supplied in the request that are not recognized for the algorithm
+- `summary` – brief description of what the algorithm accomplished
+- `nextSteps` – suggestion for how to proceed after the algorithm run
+- `hasResult` – whether a `result` field was provided in the request
 
-If either list is non-empty, `status` will be set to `failed` and no summary is produced.
+`status` will be set to `success` when all required parameters are present, otherwise `failed`.
