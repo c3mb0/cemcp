@@ -105,6 +105,16 @@ func (s *SessionState) GetDebuggingSessions() []DebuggingApproachData { return s
 
 func (s *SessionState) SessionID() string { return s.sessionID }
 
+func (s *SessionState) UpdateThought(num int, text string) (*ThoughtData, bool) {
+	for i := range s.thoughts {
+		if s.thoughts[i].ThoughtNumber == num {
+			s.thoughts[i].Thought = text
+			return &s.thoughts[i], true
+		}
+	}
+	return nil, false
+}
+
 // Server setup and handlers
 
 func setupServer() *server.MCPServer {
@@ -112,6 +122,7 @@ func setupServer() *server.MCPServer {
 	session := NewSessionState("default", defaultConfig)
 
 	registerSequentialThinking(s, session)
+	registerUpdateThought(s, session)
 	registerGetBranch(s, session)
 	registerMentalModel(s, session)
 	registerDebuggingApproach(s, session)
@@ -175,6 +186,51 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 				"totalThoughts":     len(all),
 				"remainingThoughts": state.GetRemainingThoughts(),
 				"recentThoughts":    recent,
+			},
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerUpdateThought(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"updatethought",
+		mcp.WithDescription("Update an existing thought by its number"),
+		mcp.WithNumber("thoughtNumber", mcp.Required(), mcp.Description("Number of the thought to update")),
+		mcp.WithString("thought", mcp.Required(), mcp.Description("Updated thought content")),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			ThoughtNumber int    `json:"thoughtNumber"`
+			Thought       string `json:"thought"`
+		}
+		if err := req.BindArguments(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		updated, ok := state.UpdateThought(args.ThoughtNumber, args.Thought)
+		if !ok {
+			errResp := map[string]any{"error": fmt.Sprintf("thought %d not found", args.ThoughtNumber), "status": "not_found"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		res := map[string]any{
+			"thoughtNumber": args.ThoughtNumber,
+			"thought":       updated.Thought,
+			"updated":       true,
+			"status":        "success",
+			"sessionContext": map[string]any{
+				"sessionId":      state.SessionID(),
+				"updatedThought": updated,
 			},
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
