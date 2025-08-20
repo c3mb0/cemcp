@@ -47,43 +47,86 @@ Supports various algorithms including:
 		}
 
 		fmt.Fprintln(os.Stderr, formatOutput(args))
-		summary := summaryForAlgorithm(args)
+		summary, missing, unknown := summaryForAlgorithm(args)
+		status := "success"
+		if len(missing) > 0 || len(unknown) > 0 {
+			status = "failed"
+		}
 		res := map[string]any{
-			"algorithm": args.Algorithm,
-			"status":    "success",
-			"summary":   summary,
-			"hasResult": args.Result != "",
+			"algorithm":         args.Algorithm,
+			"status":            status,
+			"summary":           summary,
+			"missingParameters": missing,
+			"unknownParameters": unknown,
+			"hasResult":         args.Result != "",
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
+		out := mcp.NewToolResultText(string(b))
+		if status == "failed" {
+			out.IsError = true
+		}
+		return out, nil
 	})
 
 	return s
 }
 
-func summaryForAlgorithm(a StochasticArgs) string {
+func summaryForAlgorithm(a StochasticArgs) (string, []string, []string) {
+	expected := map[string][]string{
+		"mdp":      []string{"gamma", "states"},
+		"mcts":     []string{"simulations", "explorationConstant"},
+		"bandit":   []string{"strategy", "epsilon"},
+		"bayesian": []string{"acquisitionFunction"},
+		"hmm":      []string{"algorithm"},
+	}
+	required := expected[a.Algorithm]
+	var missing, unknown []string
+
+	for _, k := range required {
+		if _, ok := a.Parameters[k]; !ok {
+			missing = append(missing, k)
+		}
+	}
+	for k := range a.Parameters {
+		if !contains(required, k) {
+			unknown = append(unknown, k)
+		}
+	}
+	if len(missing) > 0 || len(unknown) > 0 {
+		return "", missing, unknown
+	}
+
 	switch a.Algorithm {
 	case "mdp":
 		gamma := getNumber(a.Parameters["gamma"], 0.9)
 		states := getNumber(a.Parameters["states"], 0)
-		return fmt.Sprintf("Optimized policy over %v states with discount factor %v", states, gamma)
+		return fmt.Sprintf("Optimized policy over %v states with discount factor %v", states, gamma), nil, nil
 	case "mcts":
 		sims := getNumber(a.Parameters["simulations"], 1000)
 		c := getNumber(a.Parameters["explorationConstant"], 1.4)
-		return fmt.Sprintf("Explored %v paths with exploration constant %v", sims, c)
+		return fmt.Sprintf("Explored %v paths with exploration constant %v", sims, c), nil, nil
 	case "bandit":
 		strategy := getString(a.Parameters["strategy"], "epsilon-greedy")
 		eps := getNumber(a.Parameters["epsilon"], 0.1)
-		return fmt.Sprintf("Selected optimal arm with %s strategy (ε=%v)", strategy, eps)
+		return fmt.Sprintf("Selected optimal arm with %s strategy (ε=%v)", strategy, eps), nil, nil
 	case "bayesian":
 		acq := getString(a.Parameters["acquisitionFunction"], "expected improvement")
-		return fmt.Sprintf("Optimized objective with %s acquisition", acq)
+		return fmt.Sprintf("Optimized objective with %s acquisition", acq), nil, nil
 	case "hmm":
 		alg := getString(a.Parameters["algorithm"], "forward-backward")
-		return fmt.Sprintf("Inferred hidden states using %s algorithm", alg)
+		return fmt.Sprintf("Inferred hidden states using %s algorithm", alg), nil, nil
 	default:
-		return ""
+		return "", nil, nil
 	}
+}
+
+func contains(arr []string, v string) bool {
+	for _, s := range arr {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
 
 func getNumber(v any, def float64) float64 {
