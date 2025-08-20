@@ -30,6 +30,23 @@ func TestCompatWrapTextHandlerPropagatesErrors(t *testing.T) {
 	}
 }
 
+// Test that wrapTextHandler returns an error result when argument binding fails.
+func TestWrapTextHandlerBindingError(t *testing.T) {
+	root := t.TempDir()
+	h := wrapTextHandler(handleRead(root), formatReadResult)
+
+	// Provide invalid argument type to trigger binding error.
+	res, err := h(context.Background(), mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{"path": 123}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res == nil || !res.IsError {
+		t.Fatalf("expected error result, got %v", res)
+	}
+}
+
 func TestStructuredHandlerOmitsTextContent(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "f.txt")
@@ -47,5 +64,19 @@ func TestStructuredHandlerOmitsTextContent(t *testing.T) {
 	}
 	if len(res.Content) != 0 {
 		t.Fatalf("expected no text content, got %v", res.Content)
+	}
+}
+
+// Test that wrapStructuredHandler returns an error result when argument binding fails.
+func TestWrapStructuredHandlerBindingError(t *testing.T) {
+	root := t.TempDir()
+	h := wrapStructuredHandler(handleRead(root))
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{"path": 123}}}
+	res, err := h(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res == nil || !res.IsError {
+		t.Fatalf("expected error result, got %v", res)
 	}
 }
