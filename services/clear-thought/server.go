@@ -115,6 +115,9 @@ func setupServer() *server.MCPServer {
 	registerGetBranch(s, session)
 	registerMentalModel(s, session)
 	registerDebuggingApproach(s, session)
+	registerGetThoughts(s, session)
+	registerGetMentalModels(s, session)
+	registerGetDebuggingSessions(s, session)
 
 	return s
 }
@@ -301,6 +304,144 @@ func registerDebuggingApproach(srv *server.MCPServer, state *SessionState) {
 				"totalDebuggingApproaches": len(state.GetDebuggingSessions()),
 				"recentApproaches":         recent,
 			},
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerGetThoughts(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"getthoughts",
+		mcp.WithDescription("Retrieve stored thoughts with optional pagination"),
+		mcp.WithNumber("offset", mcp.Description("Starting index")),
+		mcp.WithNumber("limit", mcp.Description("Maximum number of thoughts to return")),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			Offset *int `json:"offset"`
+			Limit  *int `json:"limit"`
+		}
+		if err := req.BindArguments(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		all := state.GetThoughts()
+		off := 0
+		if args.Offset != nil && *args.Offset > 0 {
+			off = *args.Offset
+		}
+		if off > len(all) {
+			off = len(all)
+		}
+		lim := len(all) - off
+		if args.Limit != nil && *args.Limit >= 0 && *args.Limit < lim {
+			lim = *args.Limit
+		}
+		items := all[off : off+lim]
+
+		res := map[string]any{
+			"total":    len(all),
+			"offset":   off,
+			"limit":    lim,
+			"thoughts": items,
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerGetMentalModels(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"getmentalmodels",
+		mcp.WithDescription("Retrieve stored mental models with optional pagination"),
+		mcp.WithNumber("offset", mcp.Description("Starting index")),
+		mcp.WithNumber("limit", mcp.Description("Maximum number of models to return")),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			Offset *int `json:"offset"`
+			Limit  *int `json:"limit"`
+		}
+		if err := req.BindArguments(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		all := state.GetMentalModels()
+		off := 0
+		if args.Offset != nil && *args.Offset > 0 {
+			off = *args.Offset
+		}
+		if off > len(all) {
+			off = len(all)
+		}
+		lim := len(all) - off
+		if args.Limit != nil && *args.Limit >= 0 && *args.Limit < lim {
+			lim = *args.Limit
+		}
+		items := all[off : off+lim]
+
+		res := map[string]any{
+			"total":        len(all),
+			"offset":       off,
+			"limit":        lim,
+			"mentalModels": items,
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"getdebuggingsessions",
+		mcp.WithDescription("Retrieve stored debugging sessions with optional pagination"),
+		mcp.WithNumber("offset", mcp.Description("Starting index")),
+		mcp.WithNumber("limit", mcp.Description("Maximum number of sessions to return")),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			Offset *int `json:"offset"`
+			Limit  *int `json:"limit"`
+		}
+		if err := req.BindArguments(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		all := state.GetDebuggingSessions()
+		off := 0
+		if args.Offset != nil && *args.Offset > 0 {
+			off = *args.Offset
+		}
+		if off > len(all) {
+			off = len(all)
+		}
+		lim := len(all) - off
+		if args.Limit != nil && *args.Limit >= 0 && *args.Limit < lim {
+			lim = *args.Limit
+		}
+		items := all[off : off+lim]
+
+		res := map[string]any{
+			"total":             len(all),
+			"offset":            off,
+			"limit":             lim,
+			"debuggingSessions": items,
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil

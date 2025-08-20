@@ -6,6 +6,7 @@ This repository is organized as a Go monorepo containing independent services an
 
 - `services/`: standalone services
   - [`filesystem`](services/filesystem/): a minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mcp-go)
+  - [`clear-thought`](services/clear-thought/): session-based reasoning tools for thoughts, mental models, and debugging
 - `pkg/`: reusable Go packages shared across services
 
 ## Development
