@@ -118,6 +118,7 @@ func setupServer() *server.MCPServer {
 	registerGetThoughts(s, session)
 	registerGetMentalModels(s, session)
 	registerGetDebuggingSessions(s, session)
+	registerSessionContext(s, session)
 
 	return s
 }
@@ -442,6 +443,31 @@ func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
 			"offset":            off,
 			"limit":             lim,
 			"debuggingSessions": items,
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerSessionContext(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"sessioncontext",
+		mcp.WithDescription("Summarize session status with counts and recent entries for thoughts, mental models, and debugging sessions"),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		thoughts := state.GetThoughts()
+		models := state.GetMentalModels()
+		debug := state.GetDebuggingSessions()
+		res := map[string]any{
+			"sessionId":               state.SessionID(),
+			"totalThoughts":           len(thoughts),
+			"remainingThoughts":       state.GetRemainingThoughts(),
+			"recentThoughts":          lastThoughts(thoughts, 3),
+			"totalMentalModels":       len(models),
+			"recentMentalModels":      lastModels(models, 3),
+			"totalDebuggingSessions":  len(debug),
+			"recentDebuggingSessions": lastDebugging(debug, 3),
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil

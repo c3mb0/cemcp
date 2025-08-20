@@ -11,4 +11,5 @@ A minimal server for managing sequential thinking, mental models, and debugging 
 - `getthoughts` – list stored thoughts. Optional `offset` and `limit` parameters paginate results.
 - `getmentalmodels` – list recorded mental models. Supports `offset` and `limit`.
 - `getdebuggingsessions` – list recorded debugging sessions. Supports `offset` and `limit`.
+- `sessioncontext` – summary of counts and recent entries with remaining thought capacity. Helpful for a quick status update when reasoning becomes convoluted.
 
