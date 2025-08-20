@@ -106,10 +106,9 @@ func (s *SessionState) GetDebuggingSessions() []DebuggingApproachData { return s
 func (s *SessionState) SessionID() string { return s.sessionID }
 
 func (s *SessionState) Reset() {
-	s.thoughts = nil
-	s.mentalModels = nil
-	s.debuggingSessions = nil
-	s.branches = make(map[string]*int)
+	id := s.sessionID
+	cfg := s.config
+	*s = *NewSessionState(id, cfg)
 }
 
 func (s *SessionState) UpdateThought(num int, text string) (*ThoughtData, bool) {
