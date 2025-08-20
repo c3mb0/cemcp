@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -130,6 +132,7 @@ func setupServer() *server.MCPServer {
 	registerGetMentalModels(s, session)
 	registerGetDebuggingSessions(s, session)
 	registerSessionContext(s, session)
+	registerSearchContext(s, session)
 
 	return s
 }
@@ -550,6 +553,99 @@ func registerSessionContext(srv *server.MCPServer, state *SessionState) {
 			"recentMentalModels":      lastModels(models, 3),
 			"totalDebuggingSessions":  len(debug),
 			"recentDebuggingSessions": lastDebugging(debug, 3),
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerSearchContext(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"searchcontext",
+		mcp.WithDescription("Search thoughts, mental models, and debugging sessions"),
+		mcp.WithString("query", mcp.Required(), mcp.Description("Substring or regex to match")),
+		mcp.WithNumber("offset", mcp.Description("Starting index for paginated results")),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			Query  string `json:"query"`
+			Offset *int   `json:"offset"`
+		}
+		if err := req.BindArguments(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		match := func(s string) bool { return false }
+		if re, err := regexp.Compile(args.Query); err == nil {
+			match = func(s string) bool { return re.MatchString(s) }
+		} else {
+			match = func(s string) bool { return strings.Contains(s, args.Query) }
+		}
+
+		results := make([]map[string]any, 0)
+
+		for i, t := range state.GetThoughts() {
+			if match(t.Thought) {
+				results = append(results, map[string]any{
+					"type":  "thought",
+					"index": i,
+					"data":  t,
+				})
+			}
+		}
+
+		for i, m := range state.GetMentalModels() {
+			text := strings.Join(append([]string{m.ModelName, m.Problem, m.Reasoning, m.Conclusion}, m.Steps...), " ")
+			if match(text) {
+				results = append(results, map[string]any{
+					"type":  "mentalModel",
+					"index": i,
+					"data":  m,
+				})
+			}
+		}
+
+		for i, d := range state.GetDebuggingSessions() {
+			text := strings.Join(append([]string{d.ApproachName, d.Issue, d.Findings, d.Resolution}, d.Steps...), " ")
+			if match(text) {
+				results = append(results, map[string]any{
+					"type":  "debuggingSession",
+					"index": i,
+					"data":  d,
+				})
+			}
+		}
+
+		off := 0
+		if args.Offset != nil && *args.Offset > 0 {
+			off = *args.Offset
+		}
+		if off > len(results) {
+			off = len(results)
+		}
+		limit := 20
+		end := off + limit
+		if end > len(results) {
+			end = len(results)
+		}
+		items := results[off:end]
+		var nextOffset *int
+		if end < len(results) {
+			n := end
+			nextOffset = &n
+		}
+
+		res := map[string]any{
+			"total":      len(results),
+			"offset":     off,
+			"limit":      limit,
+			"results":    items,
+			"nextOffset": nextOffset,
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
