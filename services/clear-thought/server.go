@@ -57,6 +57,7 @@ type SessionState struct {
 	mentalModels      []MentalModelData
 	debuggingSessions []DebuggingApproachData
 	branches          map[string]*int
+	summaries         []string
 }
 
 func NewSessionState(id string, cfg ServerConfig) *SessionState {
@@ -84,12 +85,34 @@ func (s *SessionState) RegisterBranch(id string, from *int) error {
 	return nil
 }
 
-func (s *SessionState) AddThought(t ThoughtData) bool {
+func (s *SessionState) SummarizeThoughts(n int) string {
+	if n <= 0 || len(s.thoughts) == 0 {
+		return ""
+	}
+	if n > len(s.thoughts) {
+		n = len(s.thoughts)
+	}
+	parts := make([]string, n)
+	for i := 0; i < n; i++ {
+		parts[i] = s.thoughts[i].Thought
+	}
+	summary := strings.Join(parts, " ")
+	s.summaries = append(s.summaries, summary)
+	s.thoughts = append([]ThoughtData(nil), s.thoughts[n:]...)
+	return summary
+}
+
+func (s *SessionState) AddThought(t ThoughtData) (bool, string) {
 	if len(s.thoughts) >= s.config.MaxThoughtsPerSession {
-		return false
+		return false, ""
 	}
 	s.thoughts = append(s.thoughts, t)
-	return true
+	var summary string
+	threshold := int(float64(s.config.MaxThoughtsPerSession) * 0.8)
+	if len(s.thoughts) >= threshold {
+		summary = s.SummarizeThoughts(len(s.thoughts) / 2)
+	}
+	return true, summary
 }
 
 func (s *SessionState) GetThoughts() []ThoughtData { return s.thoughts }
@@ -197,9 +220,18 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			}
 		}
 
-		added := state.AddThought(args)
+		added, summary := state.AddThought(args)
 		all := state.GetThoughts()
 		recent := lastThoughts(all, 3)
+		sessionCtx := map[string]any{
+			"sessionId":         state.SessionID(),
+			"totalThoughts":     len(all),
+			"remainingThoughts": state.GetRemainingThoughts(),
+			"recentThoughts":    recent,
+		}
+		if summary != "" {
+			sessionCtx["summary"] = summary
+		}
 		res := map[string]any{
 			"thought":           args.Thought,
 			"thoughtNumber":     args.ThoughtNumber,
@@ -211,12 +243,7 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			"branchId":          args.BranchID,
 			"needsMoreThoughts": args.NeedsMoreThoughts,
 			"status":            map[bool]string{true: "success", false: "limit_reached"}[added],
-			"sessionContext": map[string]any{
-				"sessionId":         state.SessionID(),
-				"totalThoughts":     len(all),
-				"remainingThoughts": state.GetRemainingThoughts(),
-				"recentThoughts":    recent,
-			},
+			"sessionContext":    sessionCtx,
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
