@@ -24,15 +24,9 @@ func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResu
 			dprintf("fs_write error: %v", err)
 			return res, err
 		}
-		if args.CreateDirs == nil {
-			b := false
-			args.CreateDirs = &b
-		}
-		if *args.CreateDirs {
-			if err := ensureParent(full); err != nil {
-				dprintf("fs_write error: %v", err)
-				return res, err
-			}
+		if err := ensureParent(full); err != nil {
+			dprintf("fs_write error: %v", err)
+			return res, err
 		}
 		mode, err := parseMode(args.Mode)
 		if err != nil {

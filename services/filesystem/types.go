@@ -53,13 +53,12 @@ type PeekResult struct {
 
 // WriteArgs defines parameters for writing files
 type WriteArgs struct {
-	Path       string        `json:"path" description:"Target file path"`
-	Content    string        `json:"content" description:"Data to write"`
-	Strategy   writeStrategy `json:"strategy,omitempty" description:"Write strategy: overwrite, no_clobber, append, prepend, replace_range"`
-	CreateDirs *bool         `json:"create_dirs,omitempty" description:"Create parent directories if needed"`
-	Mode       string        `json:"mode,omitempty" description:"File mode in octal, e.g. 0644"`
-	Start      *int          `json:"start,omitempty" description:"Start byte for replace_range strategy"`
-	End        *int          `json:"end,omitempty" description:"End byte (exclusive) for replace_range"`
+	Path     string        `json:"path" description:"Target file path"`
+	Content  string        `json:"content" description:"Data to write"`
+	Strategy writeStrategy `json:"strategy,omitempty" description:"Write strategy: overwrite, no_clobber, append, prepend, replace_range"`
+	Mode     string        `json:"mode,omitempty" description:"File mode in octal, e.g. 0644"`
+	Start    *int          `json:"start,omitempty" description:"Start byte for replace_range strategy"`
+	End      *int          `json:"end,omitempty" description:"End byte (exclusive) for replace_range"`
 }
 
 // WriteResult contains file write operation results
@@ -147,9 +146,8 @@ type SearchResult struct {
 
 // MkdirArgs defines parameters for creating directories
 type MkdirArgs struct {
-	Path    string `json:"path" description:"Directory path to create"`
-	Parents bool   `json:"parents,omitempty" description:"Create parent directories if needed"`
-	Mode    string `json:"mode,omitempty" description:"Directory mode in octal"`
+	Path string `json:"path" description:"Directory path to create"`
+	Mode string `json:"mode,omitempty" description:"Directory mode in octal"`
 }
 
 // MkdirResult contains directory creation results

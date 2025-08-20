@@ -17,9 +17,8 @@ func FuzzHandleWrite(f *testing.F) {
 		root := t.TempDir()
 		h := handleWrite(root)
 		_, _ = h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
-			Path:       path,
-			Content:    string(data),
-			CreateDirs: boolPtr(true),
+			Path:    path,
+			Content: string(data),
 		})
 	})
 }

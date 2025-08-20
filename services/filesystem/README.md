@@ -11,6 +11,7 @@ A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mc
 - Directory listing and globbing with `**` for recursion
 - Concurrent content search with substring or regex matching
 - Optional debug logging to a specified file
+- Automatic parent directory creation for write and mkdir operations
 - Structured errors with operation context and numeric codes
 - Central configuration for tunable worker pools and size limits
 - Search statistics and binary-skipping for faster scans
@@ -60,14 +61,13 @@ Read a small window of a file.
 | `max_bytes` | number | Window size in bytes (default 4&nbsp;KiB). |
 
 ### `fs_write`
-Create or modify a file.
+Create or modify a file. Parent directories are created automatically.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `path` | string | Target file path. |
 | `content` | string | Data to write. |
 | `strategy` | string | `overwrite`, `no_clobber`, `append`, `prepend`, or `replace_range` (default `overwrite`). |
-| `create_dirs` | boolean | Create parent directories (default false). |
 | `mode` | string | File mode in octal; omit to keep existing permissions. |
 | `start` | number | Start byte for `replace_range`. |
 | `end` | number | End byte (exclusive) for `replace_range`. |
@@ -109,6 +109,22 @@ Match files using glob patterns. Supports `**` to span directories and runs conc
 |-----------|------|-------------|
 | `pattern` | string | Glob pattern relative to the base folder. |
 | `max_results` | number | Maximum matches to return (default 1000). |
+
+### `fs_mkdir`
+Create a directory and any missing parent directories.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | string | Directory path to create. |
+| `mode` | string | Directory mode in octal (default 0755). |
+
+### `fs_rmdir`
+Remove an empty directory or recursively delete its contents.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | string | Directory to remove. |
+| `recursive` | boolean | Remove contents recursively. |
 
 ### Debug Logging
 

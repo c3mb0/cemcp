@@ -14,7 +14,7 @@ func TestMkdirAndRmdir(t *testing.T) {
 	mk := handleMkdir(root)
 	rm := handleRmdir(root)
 
-	res, err := mk(context.Background(), mcp.CallToolRequest{}, MkdirArgs{Path: "a/b", Parents: true, Mode: "755"})
+	res, err := mk(context.Background(), mcp.CallToolRequest{}, MkdirArgs{Path: "a/b", Mode: "755"})
 	if err != nil || !res.Created {
 		t.Fatalf("mkdir failed: %+v err=%v", res, err)
 	}

@@ -52,15 +52,17 @@ func TestReadSkipsHugeHash(t *testing.T) {
 	}
 }
 
-func TestWriteCreateDirsDefaultFalse(t *testing.T) {
+func TestWriteCreatesDirsByDefault(t *testing.T) {
 	root := t.TempDir()
 	h := handleWrite(root)
-	_, err := h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
+	if _, err := h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
 		Path:    "nested/dir/file.txt",
 		Content: "hi",
-	})
-	if err == nil {
-		t.Fatalf("expected error when creating dirs not opted in")
+	}); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "nested", "dir", "file.txt")); err != nil {
+		t.Fatalf("expected file to exist: %v", err)
 	}
 }
 
