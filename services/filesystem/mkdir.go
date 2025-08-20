@@ -18,11 +18,7 @@ func handleMkdir(root string) mcp.StructuredToolHandlerFunc[MkdirArgs, MkdirResu
 		start := time.Now()
 		dprintf("-> fs_mkdir path=%q mode=%s", args.Path, args.Mode)
 		var out MkdirResult
-		full, err := safeJoin(root, args.Path)
-		if err != nil {
-			dprintf("fs_mkdir error: %v", err)
-			return out, err
-		}
+		paths := expandBraces(args.Path)
 		mode, err := parseMode(args.Mode)
 		if err != nil {
 			dprintf("fs_mkdir mode error: %v", err)
@@ -31,36 +27,53 @@ func handleMkdir(root string) mcp.StructuredToolHandlerFunc[MkdirArgs, MkdirResu
 		if args.Mode == "" {
 			mode = 0o755
 		}
-		created := false
-		if fi, err := os.Lstat(full); err == nil {
-			if !fi.IsDir() {
-				dprintf("fs_mkdir exists but not dir")
-				return out, fmt.Errorf("exists and not a directory: %s", args.Path)
-			}
-		} else if os.IsNotExist(err) {
-			if err := os.MkdirAll(full, mode); err != nil {
-				dprintf("fs_mkdir MkdirAll error: %v", err)
+		anyCreated := false
+		var firstFi os.FileInfo
+		for i, p := range paths {
+			full, err := safeJoin(root, p)
+			if err != nil {
+				dprintf("fs_mkdir error: %v", err)
 				return out, err
 			}
-			created = true
+			created := false
+			if fi, err := os.Lstat(full); err == nil {
+				if !fi.IsDir() {
+					dprintf("fs_mkdir exists but not dir")
+					return out, fmt.Errorf("exists and not a directory: %s", p)
+				}
+			} else if os.IsNotExist(err) {
+				if err := os.MkdirAll(full, mode); err != nil {
+					dprintf("fs_mkdir MkdirAll error: %v", err)
+					return out, err
+				}
+				created = true
+			} else {
+				dprintf("fs_mkdir lstat error: %v", err)
+				return out, err
+			}
+			fi, err := os.Lstat(full)
+			if err != nil {
+				dprintf("fs_mkdir stat error: %v", err)
+				return out, err
+			}
+			if i == 0 {
+				firstFi = fi
+			}
+			anyCreated = anyCreated || created
+		}
+		if firstFi != nil {
+			out = MkdirResult{
+				Path:    args.Path,
+				Created: anyCreated,
+				MetaFields: MetaFields{
+					Mode:       fmt.Sprintf("%#o", firstFi.Mode()&os.ModePerm),
+					ModifiedAt: firstFi.ModTime().UTC().Format(time.RFC3339),
+				},
+			}
 		} else {
-			dprintf("fs_mkdir lstat error: %v", err)
-			return out, err
+			out = MkdirResult{Path: args.Path, Created: anyCreated}
 		}
-		fi, err := os.Lstat(full)
-		if err != nil {
-			dprintf("fs_mkdir stat error: %v", err)
-			return out, err
-		}
-		out = MkdirResult{
-			Path:    args.Path,
-			Created: created,
-			MetaFields: MetaFields{
-				Mode:       fmt.Sprintf("%#o", fi.Mode()&os.ModePerm),
-				ModifiedAt: fi.ModTime().UTC().Format(time.RFC3339),
-			},
-		}
-		dprintf("<- fs_mkdir ok created=%v dur=%s", created, time.Since(start))
+		dprintf("<- fs_mkdir ok created=%v dur=%s", anyCreated, time.Since(start))
 		return out, nil
 	}
 }
