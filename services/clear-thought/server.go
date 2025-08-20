@@ -146,6 +146,32 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			out.IsError = true
 			return out, nil
 		}
+		expected := len(state.GetThoughts()) + 1
+		if args.ThoughtNumber != expected {
+			errResp := map[string]any{
+				"error":                 fmt.Sprintf("thoughtNumber must be %d but got %d", expected, args.ThoughtNumber),
+				"expectedThoughtNumber": expected,
+				"status":                "failed",
+			}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+		if args.IsRevision != nil && args.RevisesThought == nil {
+			errResp := map[string]any{"error": "revisesThought is required when isRevision is set", "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+		if args.BranchFromThought != nil && args.BranchID == nil {
+			errResp := map[string]any{"error": "branchId is required when branchFromThought is provided", "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
 		if args.BranchID != nil {
 			if err := state.RegisterBranch(*args.BranchID, args.BranchFromThought); err != nil {
 				errResp := map[string]any{"error": err.Error(), "status": "failed"}
