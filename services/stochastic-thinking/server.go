@@ -18,8 +18,25 @@ type StochasticArgs struct {
 	Result     string         `json:"result,omitempty"`
 }
 
+type AlgorithmSpec struct {
+	Required    []string       `json:"required"`
+	Optional    map[string]any `json:"optional"`
+	Description string         `json:"description"`
+}
+
 func setupServer() *server.MCPServer {
 	s := server.NewMCPServer("stochastic-thinking", "0.1.0")
+
+	specTool := mcp.NewTool(
+		"algorithmspec",
+		mcp.WithDescription("List supported stochastic algorithms and their parameter requirements"),
+	)
+
+	s.AddTool(specTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		specs := algorithmSpecs()
+		b, _ := json.MarshalIndent(specs, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
 
 	tool := mcp.NewTool(
 		"stochasticalgorithm",
@@ -59,6 +76,44 @@ Supports various algorithms including:
 	})
 
 	return s
+}
+
+func algorithmSpecs() map[string]AlgorithmSpec {
+	return map[string]AlgorithmSpec{
+		"mdp": {
+			Required: []string{"states"},
+			Optional: map[string]any{
+				"gamma": 0.9,
+			},
+			Description: "Markov Decision Processes (MDPs): Optimize policies over long sequences of decisions",
+		},
+		"mcts": {
+			Optional: map[string]any{
+				"simulations":         1000,
+				"explorationConstant": 1.4,
+			},
+			Description: "Monte Carlo Tree Search (MCTS): Simulate future action sequences for large decision spaces",
+		},
+		"bandit": {
+			Optional: map[string]any{
+				"strategy": "epsilon-greedy",
+				"epsilon":  0.1,
+			},
+			Description: "Multi-Armed Bandit: Balance exploration vs exploitation in action selection",
+		},
+		"bayesian": {
+			Optional: map[string]any{
+				"acquisitionFunction": "expected improvement",
+			},
+			Description: "Bayesian Optimization: Optimize decisions with probabilistic inference",
+		},
+		"hmm": {
+			Optional: map[string]any{
+				"algorithm": "forward-backward",
+			},
+			Description: "Hidden Markov Models (HMMs): Infer latent states affecting decision outcomes",
+		},
+	}
 }
 
 func summaryForAlgorithm(a StochasticArgs) string {
