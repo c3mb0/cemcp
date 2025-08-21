@@ -200,10 +200,10 @@ func (s *SessionState) Reset() {
 
 // Server setup and handlers
 
-func setupServer(sessionID string, cfg ServerConfig) *server.MCPServer {
+func setupServer(cfg ServerConfig) *server.MCPServer {
 	hooks := &server.Hooks{}
 	hooks.AddOnRegisterSession(func(ctx context.Context, sess server.ClientSession) {
-		sessionStates.Store(sess.SessionID(), NewSessionState(sessionID, cfg))
+		sessionStates.Store(sess.SessionID(), NewSessionState(sess.SessionID(), cfg))
 	})
 	hooks.AddOnUnregisterSession(func(ctx context.Context, sess server.ClientSession) {
 		sessionStates.Delete(sess.SessionID())

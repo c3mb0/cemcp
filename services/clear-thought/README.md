@@ -19,7 +19,6 @@ A minimal server for managing sequential thinking, mental models, and debugging 
 
 The server supports optional configuration via command-line flags or environment variables:
 
-- `-session` / `CT_SESSION_ID` – identifier used when creating new sessions (default `default`).
 - `-max-thoughts` / `CT_MAX_THOUGHTS` – maximum number of thoughts stored per session (default `100`).
 
 Flags take precedence over environment variables.
