@@ -522,7 +522,7 @@ func registerResetSession(srv *server.MCPServer, state *SessionState) {
 		res := map[string]any{
 			"status":            "success",
 			"sessionId":         state.SessionID(),
-			"remainingThoughts": state.GetRemainingThoughts(),
+			"remainingCapacity": state.GetRemainingThoughts(),
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
