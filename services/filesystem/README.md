@@ -33,12 +33,6 @@ Use the `--root` flag to pick the base folder where all actions occur.
 
 The server communicates over stdio; see `main.go` for tool definitions and flags.
 
-### Session configuration
-
-`filesystem` can track usage per client session. Set `MCP_SESSION_ID` or pass
-`--session-id` to label a session. Limit tool invocations by setting
-`MCP_MAX_THOUGHTS` or using `--max-thoughts` (0 means no limit).
-
 ### Agent guidance
 
 - All paths are resolved relative to the chosen base folder; do not attempt `../` escapes.

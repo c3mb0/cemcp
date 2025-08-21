@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 )
 
 // Configuration constants with tunable defaults
@@ -42,18 +41,7 @@ var (
 	workersFlag     = flag.Int("workers", defaultWorkers, "number of worker threads (0=auto)")
 	maxSizeFlag     = flag.Int64("max-size", maxFileSize, "maximum file size in bytes")
 	lockTimeoutFlag = flag.Int("lock-timeout", defaultLockTimeout, "file lock timeout in seconds")
-	sessionIDFlag   = flag.String("session-id", os.Getenv("MCP_SESSION_ID"), "session identifier")
-	maxThoughtsFlag = flag.Int("max-thoughts", envInt("MCP_MAX_THOUGHTS", 0), "maximum tool calls per session (0=unlimited)")
 )
-
-func envInt(name string, def int) int {
-	if v := os.Getenv(name); v != "" {
-		if i, err := strconv.Atoi(v); err == nil {
-			return i
-		}
-	}
-	return def
-}
 
 // ServerConfig holds server configuration
 type ServerConfig struct {
@@ -63,8 +51,6 @@ type ServerConfig struct {
 	Workers     int
 	MaxFileSize int64
 	LockTimeout int
-	SessionID   string
-	MaxThoughts int
 }
 
 // LoadConfig loads configuration from flags and environment
@@ -98,8 +84,6 @@ func LoadConfig() (*ServerConfig, error) {
 		Workers:     workers,
 		MaxFileSize: *maxSizeFlag,
 		LockTimeout: *lockTimeoutFlag,
-		SessionID:   *sessionIDFlag,
-		MaxThoughts: *maxThoughtsFlag,
 	}
 
 	// Validate configuration
@@ -126,10 +110,6 @@ func (c *ServerConfig) Validate() error {
 
 	if c.LockTimeout < 1 {
 		return fmt.Errorf("lock timeout must be at least 1 second")
-	}
-
-	if c.MaxThoughts < 0 {
-		return fmt.Errorf("max thoughts must be non-negative")
 	}
 
 	return nil

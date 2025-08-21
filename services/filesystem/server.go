@@ -51,7 +51,6 @@ func wrapStructuredHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFu
 
 func setupServer(root string) *server.MCPServer {
 	s := server.NewMCPServer("fs-mcp-go", "0.1.0")
-	server.WithToolHandlerMiddleware(sessionMiddleware())(s)
 
 	sessions := map[string]*SessionState{
 		"default": {Root: root},
