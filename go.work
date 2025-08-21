@@ -1,9 +1,8 @@
 go 1.24.5
 
 use (
-./pkg
-./services/filesystem
-./services/stochastic-thinking
-./services/clear-thought
+	./pkg
+	./services/clear-thought
+	./services/filesystem
+	./services/stochastic-thinking
 )
-
