@@ -124,7 +124,7 @@ func (s *SessionState) UpdateThought(num int, text string) (*ThoughtData, bool) 
 // Server setup and handlers
 
 func setupServer() *server.MCPServer {
-	s := server.NewMCPServer("clear-thought", "0.0.5")
+	s := server.NewMCPServer("clear-thought", "0.0.6")
 	session := NewSessionState("default", defaultConfig)
 
 	registerSequentialThinking(s, session)
