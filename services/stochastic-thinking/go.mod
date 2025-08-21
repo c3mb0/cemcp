@@ -2,7 +2,10 @@ module github.com/c3mb0/cemcp/services/stochastic-thinking
 
 go 1.24.5
 
-require github.com/mark3labs/mcp-go v0.37.0
+require (
+	github.com/c3mb0/cemcp/pkg v0.0.0
+	github.com/mark3labs/mcp-go v0.37.0
+)
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
@@ -15,3 +18,5 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/c3mb0/cemcp/pkg => ../../pkg

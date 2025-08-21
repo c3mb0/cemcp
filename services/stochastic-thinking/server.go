@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/c3mb0/cemcp/pkg/stochastic"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -87,6 +88,21 @@ Supports various algorithms including:
 
 		fmt.Fprintln(os.Stderr, formatOutput(args))
 		summary, nextSteps := summaryForAlgorithm(args)
+
+		sessionID := ""
+		if req.Params.Meta != nil {
+			if v, ok := req.Params.Meta.AdditionalFields["sessionId"].(string); ok {
+				sessionID = v
+			}
+		}
+		if sessionID != "" {
+			_ = stochastic.WriteSummary(sessionID, stochastic.StochasticSummary{
+				Algorithm: args.Algorithm,
+				Summary:   summary,
+				NextSteps: nextSteps,
+			})
+		}
+
 		res := map[string]any{
 			"algorithm": args.Algorithm,
 			"status":    "success",
