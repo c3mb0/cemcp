@@ -121,6 +121,16 @@ func (s *SessionState) GetRemainingThoughts() int {
 	return s.config.MaxThoughtsPerSession - len(s.thoughts)
 }
 
+func (s *SessionState) RetractThought() (*ThoughtData, bool) {
+	n := len(s.thoughts)
+	if n == 0 {
+		return nil, false
+	}
+	t := s.thoughts[n-1]
+	s.thoughts = s.thoughts[:n-1]
+	return &t, true
+}
+
 func (s *SessionState) AddMentalModel(m MentalModelData)   { s.mentalModels = append(s.mentalModels, m) }
 func (s *SessionState) GetMentalModels() []MentalModelData { return s.mentalModels }
 
@@ -162,6 +172,7 @@ func setupServer() *server.MCPServer {
 
 	registerSequentialThinking(s, session)
 	registerUpdateThought(s, session)
+	registerRetractThought(s, session)
 	registerGetBranch(s, session)
 	registerMentalModel(s, session)
 	registerDebuggingApproach(s, session)
@@ -307,6 +318,33 @@ func registerUpdateThought(srv *server.MCPServer, state *SessionState) {
 				"sessionId":      state.SessionID(),
 				"updatedThought": updated,
 			},
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerRetractThought(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"retractthought",
+		mcp.WithDescription("Remove the most recent thought"),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		t, ok := state.RetractThought()
+		if !ok {
+			errResp := map[string]any{"error": "no thoughts to retract", "status": "empty"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		res := map[string]any{
+			"retractedThought":  t,
+			"totalThoughts":     len(state.GetThoughts()),
+			"remainingThoughts": state.GetRemainingThoughts(),
+			"status":            "success",
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil

@@ -12,4 +12,10 @@ A minimal server for managing sequential thinking, mental models, and debugging 
 - `getmentalmodels` – list recorded mental models. Supports `offset` and `limit`.
 - `getdebuggingsessions` – list recorded debugging sessions. Supports `offset` and `limit`.
 - `sessioncontext` – summary of counts and recent entries with remaining thought capacity. Helpful for a quick status update when reasoning becomes convoluted.
+- `retractthought` – remove the most recent thought when it becomes irrelevant or incorrect.
 
+## Typical Use Cases
+
+- Backtrack a mistaken line of reasoning by retracting the latest thought and freeing capacity for new ideas.
+- Capture and review mental models or debugging approaches used during problem solving.
+- Obtain a quick snapshot of session context when reasoning becomes complex or needs summarization.
