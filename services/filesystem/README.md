@@ -127,6 +127,23 @@ Remove an empty directory or recursively delete its contents.
 | `path` | string | Directory to remove. |
 | `recursive` | boolean | Remove contents recursively. |
 
+### `addgoal`
+Append a new goal to the current session.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `description` | string | Goal description. |
+| `notes` | string | Optional notes. |
+
+### `updategoal`
+Modify or complete an existing goal.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `index` | number | Goal index. |
+| `completed` | boolean | Mark goal as completed. |
+| `notes` | string | Replace goal notes. |
+
 ### Debug Logging
 
 Pass `--debug /path/to/log` to write verbose logs to the specified file.
