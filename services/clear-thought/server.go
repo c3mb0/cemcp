@@ -210,16 +210,15 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			out.IsError = true
 			return out, nil
 		}
-		expected := len(state.GetThoughts()) + 1
-		if args.ThoughtNumber != expected {
-			errResp := map[string]any{
-				"error":                 fmt.Sprintf("thoughtNumber must be %d but got %d", expected, args.ThoughtNumber),
-				"expectedThoughtNumber": expected,
-				"status":                "failed",
+		expectedThoughtNumber := len(state.GetThoughts()) + 1
+		if args.ThoughtNumber != expectedThoughtNumber {
+			warnResp := map[string]any{
+				"error":                 fmt.Sprintf("thoughtNumber must be %d but got %d", expectedThoughtNumber, args.ThoughtNumber),
+				"expectedThoughtNumber": expectedThoughtNumber,
+				"status":                "out_of_order",
 			}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, _ := json.MarshalIndent(warnResp, "", "  ")
 			out := mcp.NewToolResultText(string(b))
-			out.IsError = true
 			return out, nil
 		}
 		if args.IsRevision != nil && args.RevisesThought == nil {
@@ -262,17 +261,18 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			sessionCtx["stochasticSummary"] = ss
 		}
 		res := map[string]any{
-			"thought":           args.Thought,
-			"thoughtNumber":     args.ThoughtNumber,
-			"totalThoughts":     args.TotalThoughts,
-			"nextThoughtNeeded": args.NextThoughtNeeded,
-			"isRevision":        args.IsRevision,
-			"revisesThought":    args.RevisesThought,
-			"branchFromThought": args.BranchFromThought,
-			"branchId":          args.BranchID,
-			"needsMoreThoughts": args.NeedsMoreThoughts,
-			"status":            map[bool]string{true: "success", false: "limit_reached"}[added],
-			"sessionContext":    sessionCtx,
+			"thought":               args.Thought,
+			"thoughtNumber":         args.ThoughtNumber,
+			"expectedThoughtNumber": expectedThoughtNumber,
+			"totalThoughts":         args.TotalThoughts,
+			"nextThoughtNeeded":     args.NextThoughtNeeded,
+			"isRevision":            args.IsRevision,
+			"revisesThought":        args.RevisesThought,
+			"branchFromThought":     args.BranchFromThought,
+			"branchId":              args.BranchID,
+			"needsMoreThoughts":     args.NeedsMoreThoughts,
+			"status":                map[bool]string{true: "success", false: "limit_reached"}[added],
+			"sessionContext":        sessionCtx,
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
