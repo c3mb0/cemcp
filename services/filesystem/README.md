@@ -15,6 +15,7 @@ A minimal file-system server built with [MCP-Go](https://github.com/mark3labs/mc
 - Structured errors with operation context and numeric codes
 - Central configuration for tunable worker pools and size limits
 - Search statistics and binary-skipping for faster scans
+- Session goal tracking via `addgoal` and `updategoal` tools so agents can manage objectives across requests
 - Sane defaults to limit output: 64 KiB reads, 4 KiB peeks, 1000 list/glob entries, 100 search matches
 
 ## Installation
