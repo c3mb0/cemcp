@@ -283,6 +283,7 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			"needsMoreThoughts":     args.NeedsMoreThoughts,
 			"status":                map[bool]string{true: "success", false: "limit_reached"}[added],
 			"sessionContext":        sessionCtx,
+			"hint":                  fmt.Sprintf("Submit thought #%d if continuing.", expectedThoughtNumber),
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil

@@ -23,5 +23,6 @@ The tool returns the following fields:
 - `summary` – brief description of what the algorithm accomplished
 - `nextSteps` – suggestion for how to proceed after the algorithm run
 - `hasResult` – whether a `result` field was provided in the request
+- `hint` – suggests rerunning with a `result` to verify outcomes
 
 `status` will be set to `success` when all required parameters are present, otherwise `failed`.
