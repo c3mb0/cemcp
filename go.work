@@ -2,7 +2,6 @@ go 1.24.5
 
 use (
 	./pkg
-	./services/clear-thought
 	./services/filesystem
-	./services/stochastic-thinking
+	./services/stochastic-clarity
 )

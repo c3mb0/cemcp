@@ -12,6 +12,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// Types and specs for stochastic algorithms
+
 type MDPParams struct {
 	Gamma  *float64 `json:"gamma"`
 	States *int     `json:"states"`
@@ -82,17 +84,14 @@ func algorithmSpecs() map[string]AlgorithmSpec {
 	}
 }
 
-func setupServer() *server.MCPServer {
-	s := server.NewMCPServer("stochastic-thinking", "0.1.0")
-
+func registerStochasticTools(srv *server.MCPServer) {
 	specTool := mcp.NewTool(
 		"algorithmspec",
 		mcp.WithDescription("List available stochastic algorithms and their parameters"),
 	)
-	s.AddTool(specTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(specTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		b, _ := json.MarshalIndent(algorithmSpecs(), "", "  ")
-		out := mcp.NewToolResultText(string(b))
-		return out, nil
+		return mcp.NewToolResultText(string(b)), nil
 	})
 
 	tool := mcp.NewTool(
@@ -114,7 +113,7 @@ Supports various algorithms including:
 		mcp.WithString("result"),
 	)
 
-	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var args StochasticArgs
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
@@ -158,15 +157,14 @@ Supports various algorithms including:
 			"hint":      "Run again with `result` populated to verify outcomes.",
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
-		out := mcp.NewToolResultText(string(b))
-		return out, nil
+		return mcp.NewToolResultText(string(b)), nil
 	})
 
 	examplesTool := mcp.NewTool(
 		"stochasticexamples",
 		mcp.WithDescription("Sample requests for each stochastic algorithm"),
 	)
-	s.AddTool(examplesTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(examplesTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		examples := []map[string]any{
 			{
 				"algorithm": "mdp",
@@ -210,8 +208,6 @@ Supports various algorithms including:
 		b, _ := json.MarshalIndent(examples, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
 	})
-
-	return s
 }
 
 func summaryForAlgorithm(a StochasticArgs) (string, string) {

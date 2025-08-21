@@ -1,6 +1,6 @@
-# clear-thought
+# stochastic-clarity
 
-A minimal server for managing sequential thinking, mental models, and debugging approaches.
+A unified server combining structured reasoning tools with stochastic decision-making algorithms.
 
 ## Tools
 
@@ -14,6 +14,10 @@ A minimal server for managing sequential thinking, mental models, and debugging 
 - `sessioncontext` – summary of counts and recent entries with remaining thought capacity. Helpful for a quick status update when reasoning becomes convoluted.
 - `resetsession` – clear all stored thoughts, mental models, and debugging sessions to discard prior context and restore full thought capacity.
 - `retractthought` – remove the most recent thought when it becomes irrelevant or incorrect.
+- `stochasticalgorithm` – apply stochastic algorithms such as MDPs or MCTS to decision problems.
+- `algorithmspec` – list supported stochastic algorithms and required parameters.
+- `stochasticexamples` – sample requests for stochastic algorithms.
+- `stochasticclarityexamples` – sample requests covering all tools.
 
 ## Typical Use Cases
 

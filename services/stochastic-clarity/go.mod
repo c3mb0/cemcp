@@ -1,4 +1,4 @@
-module github.com/c3mb0/cemcp/services/stochastic-thinking
+module github.com/c3mb0/cemcp/services/stochastic-clarity
 
 go 1.24.5
 
