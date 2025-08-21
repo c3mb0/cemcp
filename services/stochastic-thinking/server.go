@@ -46,8 +46,54 @@ type StochasticArgs struct {
 	Result    string          `json:"result,omitempty"`
 }
 
+type AlgorithmSpec struct {
+	Required    []string       `json:"required"`
+	Optional    map[string]any `json:"optional"`
+	Description string         `json:"description"`
+}
+
+func algorithmSpecs() map[string]AlgorithmSpec {
+	return map[string]AlgorithmSpec{
+		"mdp": {
+			Required:    []string{"gamma", "states"},
+			Optional:    map[string]any{},
+			Description: "Optimize policies over long sequences of decisions",
+		},
+		"mcts": {
+			Required:    []string{"simulations", "explorationConstant"},
+			Optional:    map[string]any{},
+			Description: "Simulate future action sequences for large decision spaces",
+		},
+		"bandit": {
+			Required:    []string{"strategy", "epsilon"},
+			Optional:    map[string]any{},
+			Description: "Balance exploration vs exploitation in action selection",
+		},
+		"bayesian": {
+			Required:    []string{"acquisitionFunction"},
+			Optional:    map[string]any{},
+			Description: "Optimize decisions with probabilistic inference",
+		},
+		"hmm": {
+			Required:    []string{"algorithm"},
+			Optional:    map[string]any{},
+			Description: "Infer latent states affecting decision outcomes",
+		},
+	}
+}
+
 func setupServer() *server.MCPServer {
 	s := server.NewMCPServer("stochastic-thinking", "0.1.0")
+
+	specTool := mcp.NewTool(
+		"algorithmspec",
+		mcp.WithDescription("List available stochastic algorithms and their parameters"),
+	)
+	s.AddTool(specTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		b, _ := json.MarshalIndent(algorithmSpecs(), "", "  ")
+		out := mcp.NewToolResultText(string(b))
+		return out, nil
+	})
 
 	tool := mcp.NewTool(
 		"stochasticalgorithm",
