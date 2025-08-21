@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -14,10 +15,15 @@ func formatWriteResult(r WriteResult) string {
 	return fmt.Sprintf("path=%s action=%s bytes=%d created=%v mime=%s sha=%s", r.Path, r.Action, r.Bytes, r.Created, r.MIMEType, r.SHA256)
 }
 
-func handleWrite(root string) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResult] {
+func handleWrite(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[WriteArgs, WriteResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args WriteArgs) (WriteResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return WriteResult{}, err
+		}
+		root := state.Root
 		start := time.Now()
-		dprintf("-> fs_write path=%q strategy=%q bytes=%d", args.Path, args.Strategy, len(args.Content))
+		dprintf("%s -> fs_write path=%q strategy=%q bytes=%d", sessionContext(ctx), args.Path, args.Strategy, len(args.Content))
 		var res WriteResult
 		full, err := safeJoin(root, args.Path)
 		if err != nil {

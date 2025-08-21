@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -24,10 +25,15 @@ func formatListResult(r ListResult) string {
 	return b.String()
 }
 
-func handleList(root string) mcp.StructuredToolHandlerFunc[ListArgs, ListResult] {
+func handleList(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[ListArgs, ListResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args ListArgs) (ListResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return ListResult{}, err
+		}
+		root := state.Root
 		start := time.Now()
-		dprintf("-> fs_list path=%q recursive=%v max_entries=%d", args.Path, args.Recursive, args.MaxEntries)
+		dprintf("%s -> fs_list path=%q recursive=%v max_entries=%d", sessionContext(ctx), args.Path, args.Recursive, args.MaxEntries)
 		var out ListResult
 		base, err := safeJoinResolveFinal(root, args.Path)
 		if err != nil {

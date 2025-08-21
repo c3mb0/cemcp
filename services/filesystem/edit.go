@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -16,10 +17,15 @@ func formatEditResult(r EditResult) string {
 	return fmt.Sprintf("path=%s replacements=%d bytes=%d sha=%s", r.Path, r.Replacements, r.Bytes, r.SHA256)
 }
 
-func handleEdit(root string) mcp.StructuredToolHandlerFunc[EditArgs, EditResult] {
+func handleEdit(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[EditArgs, EditResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args EditArgs) (EditResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return EditResult{}, err
+		}
+		root := state.Root
 		start := time.Now()
-		dprintf("-> fs_edit path=%q regex=%v count=%d", args.Path, args.Regex, args.Count)
+		dprintf("%s -> fs_edit path=%q regex=%v count=%d", sessionContext(ctx), args.Path, args.Regex, args.Count)
 		var res EditResult
 		if args.Path == "" || args.Pattern == "" {
 			return res, errors.New("path and pattern required")
