@@ -140,6 +140,19 @@ func (s *SessionState) UpdateThought(num int, text string) (*ThoughtData, bool) 
 	return nil, false
 }
 
+func (s *SessionState) TrimThoughts(keepLast int) (removed, remaining int) {
+	if keepLast < 0 {
+		keepLast = 0
+	}
+	total := len(s.thoughts)
+	if keepLast >= total {
+		return 0, total
+	}
+	removed = total - keepLast
+	s.thoughts = append([]ThoughtData(nil), s.thoughts[total-keepLast:]...)
+	return removed, len(s.thoughts)
+}
+
 // Server setup and handlers
 
 func setupServer() *server.MCPServer {
@@ -154,6 +167,7 @@ func setupServer() *server.MCPServer {
 	registerGetThoughts(s, session)
 	registerGetMentalModels(s, session)
 	registerGetDebuggingSessions(s, session)
+	registerTrimSession(s, session)
 	registerSessionContext(s, session)
 	registerSearchContext(s, session)
 
@@ -673,6 +687,35 @@ func registerSearchContext(srv *server.MCPServer, state *SessionState) {
 			"limit":      limit,
 			"results":    items,
 			"nextOffset": nextOffset,
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerTrimSession(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"trimsession",
+		mcp.WithDescription("Trim stored thoughts keeping only the most recent ones"),
+		mcp.WithNumber("keepLast", mcp.Required(), mcp.Description("Number of recent thoughts to keep")),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			KeepLast int `json:"keepLast"`
+		}
+		if err := req.BindArguments(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		removed, remaining := state.TrimThoughts(args.KeepLast)
+		res := map[string]any{
+			"removed":   removed,
+			"remaining": remaining,
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
