@@ -155,6 +155,7 @@ Supports various algorithms including:
 			"summary":   summary,
 			"hasResult": args.Result != "",
 			"nextSteps": nextSteps,
+			"hint":      "Run again with `result` populated to verify outcomes.",
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		out := mcp.NewToolResultText(string(b))

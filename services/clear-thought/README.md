@@ -4,7 +4,7 @@ A minimal server for managing sequential thinking, mental models, and debugging 
 
 ## Tools
 
-- `sequentialthinking` – process a stream of thoughts with branching and revision support.
+- `sequentialthinking` – process a stream of thoughts with branching and revision support. Responses include a `hint` with the next expected thought number.
 - `getbranch` – retrieve the sequence of thoughts for a specific branch.
 - `mentalmodel` – record the use of a mental model to analyze a problem.
 - `debuggingapproach` – record a systematic debugging session.
