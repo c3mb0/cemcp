@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -200,44 +199,46 @@ func TestHandleReadAndPeekVariants(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "b.bin")
 	os.WriteFile(p, []byte("hello"), 0o644)
-	rd := handleRead(root)
-	res, err := rd(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "b.bin"})
+	ctx, sessions, mu := testSession(root)
+	rd := handleRead(sessions, mu)
+	res, err := rd(ctx, mcp.CallToolRequest{}, ReadArgs{Path: "b.bin"})
 	if err != nil || res.Content != "hello" {
 		t.Fatalf("read failed: %+v %v", res, err)
 	}
-	if _, err := rd(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "../bad"}); err == nil {
+	if _, err := rd(ctx, mcp.CallToolRequest{}, ReadArgs{Path: "../bad"}); err == nil {
 		t.Fatalf("expected path error")
 	}
-	pk := handlePeek(root)
-	res2, err := pk(context.Background(), mcp.CallToolRequest{}, PeekArgs{Path: "b.bin", Offset: -2, MaxBytes: 2})
+	pk := handlePeek(sessions, mu)
+	res2, err := pk(ctx, mcp.CallToolRequest{}, PeekArgs{Path: "b.bin", Offset: -2, MaxBytes: 2})
 	if err != nil || res2.Content != "he" {
 		t.Fatalf("peek neg offset failed: %+v %v", res2, err)
 	}
-	if _, err := pk(context.Background(), mcp.CallToolRequest{}, PeekArgs{Path: "../bad"}); err == nil {
+	if _, err := pk(ctx, mcp.CallToolRequest{}, PeekArgs{Path: "../bad"}); err == nil {
 		t.Fatalf("expected peek path error")
 	}
 }
 
 func TestHandleWriteErrors(t *testing.T) {
 	root := t.TempDir()
-	wr := handleWrite(root)
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Strategy: "bogus", Content: "x"}); err == nil {
+	ctx, sessions, mu := testSession(root)
+	wr := handleWrite(sessions, mu)
+	if _, err := wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Strategy: "bogus", Content: "x"}); err == nil {
 		t.Fatalf("expected strategy error")
 	}
 	// append to directory should error
 	os.Mkdir(filepath.Join(root, "adir"), 0o755)
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "adir", Content: "x", Strategy: strategyAppend}); err == nil {
+	if _, err := wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "adir", Content: "x", Strategy: strategyAppend}); err == nil {
 		t.Fatalf("expected append dir error")
 	}
 
 	// prepare file for replace_range tests
 	os.WriteFile(filepath.Join(root, "r.txt"), []byte("abcd"), 0o644)
 	s, e := 3, 2 // invalid range (end < start)
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "r.txt", Content: "x", Strategy: strategyReplaceRange, Start: &s, End: &e}); err == nil {
+	if _, err := wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "r.txt", Content: "x", Strategy: strategyReplaceRange, Start: &s, End: &e}); err == nil {
 		t.Fatalf("expected invalid range error")
 	}
 	s = 0
-	if _, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "r.txt", Content: "x", Strategy: strategyReplaceRange, Start: &s}); err == nil {
+	if _, err := wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "r.txt", Content: "x", Strategy: strategyReplaceRange, Start: &s}); err == nil {
 		t.Fatalf("expected missing end error")
 	}
 }
@@ -246,11 +247,12 @@ func TestHandleEditError(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "e.txt")
 	os.WriteFile(p, []byte("data"), 0o644)
-	ed := handleEdit(root)
-	if _, err := ed(context.Background(), mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: "(", Replace: "x", Regex: true}); err == nil {
+	ctx, sessions, mu := testSession(root)
+	ed := handleEdit(sessions, mu)
+	if _, err := ed(ctx, mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: "(", Replace: "x", Regex: true}); err == nil {
 		t.Fatalf("expected regex error")
 	}
-	if _, err := ed(context.Background(), mcp.CallToolRequest{}, EditArgs{Path: "missing.txt", Pattern: "x", Replace: "y"}); err == nil {
+	if _, err := ed(ctx, mcp.CallToolRequest{}, EditArgs{Path: "missing.txt", Pattern: "x", Replace: "y"}); err == nil {
 		t.Fatalf("expected missing file error")
 	}
 }
@@ -259,30 +261,32 @@ func TestHandleListVariants(t *testing.T) {
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, "a.txt"), []byte(""), 0o644)
 	os.WriteFile(filepath.Join(root, "b.txt"), []byte(""), 0o644)
-	hl := handleList(root)
-	res, err := hl(context.Background(), mcp.CallToolRequest{}, ListArgs{Path: ".", MaxEntries: 1})
+	ctx, sessions, mu := testSession(root)
+	hl := handleList(sessions, mu)
+	res, err := hl(ctx, mcp.CallToolRequest{}, ListArgs{Path: ".", MaxEntries: 1})
 	if err != nil || len(res.Entries) != 1 {
 		t.Fatalf("non-recursive max failed: %+v %v", res, err)
 	}
-	res, err = hl(context.Background(), mcp.CallToolRequest{}, ListArgs{Path: "a.txt"})
+	res, err = hl(ctx, mcp.CallToolRequest{}, ListArgs{Path: "a.txt"})
 	if err != nil || len(res.Entries) != 1 || res.Entries[0].Name != "a.txt" {
 		t.Fatalf("file path list failed: %+v %v", res, err)
 	}
-	if _, err = hl(context.Background(), mcp.CallToolRequest{}, ListArgs{Path: "missing"}); err == nil {
+	if _, err = hl(ctx, mcp.CallToolRequest{}, ListArgs{Path: "missing"}); err == nil {
 		t.Fatalf("expected missing error")
 	}
 }
 
 func TestHandleGlobErrors(t *testing.T) {
 	root := t.TempDir()
-	gb := handleGlob(root)
-	if _, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: ""}); err == nil {
+	ctx, sessions, mu := testSession(root)
+	gb := handleGlob(sessions, mu)
+	if _, err := gb(ctx, mcp.CallToolRequest{}, GlobArgs{Pattern: ""}); err == nil {
 		t.Fatalf("expected pattern error")
 	}
-	if _, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: "["}); err == nil {
+	if _, err := gb(ctx, mcp.CallToolRequest{}, GlobArgs{Pattern: "["}); err == nil {
 		t.Fatalf("expected invalid pattern error")
 	}
-	if _, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: "../*"}); err == nil {
+	if _, err := gb(ctx, mcp.CallToolRequest{}, GlobArgs{Pattern: "../*"}); err == nil {
 		t.Fatalf("expected join error")
 	}
 }
@@ -292,8 +296,9 @@ func TestHandleGlobMaxResults(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "a.txt"), []byte(""), 0o644)
 	mustWrite(t, filepath.Join(root, "b.txt"), []byte(""), 0o644)
 	mustWrite(t, filepath.Join(root, "c.txt"), []byte(""), 0o644)
-	gb := handleGlob(root)
-	res, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: "*.txt", MaxResults: 2})
+	ctx, sessions, mu := testSession(root)
+	gb := handleGlob(sessions, mu)
+	res, err := gb(ctx, mcp.CallToolRequest{}, GlobArgs{Pattern: "*.txt", MaxResults: 2})
 	if err != nil {
 		t.Fatal(err)
 	}

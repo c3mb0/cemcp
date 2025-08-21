@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,10 +15,11 @@ func TestCompatWrapTextHandlerPropagatesErrors(t *testing.T) {
 	t.Cleanup(func() { *compatFlag = orig })
 
 	root := t.TempDir()
-	h := wrapTextHandler(handleRead(root), formatReadResult)
+	ctx, sessions, mu := testSession(root)
+	h := wrapTextHandler(handleRead(sessions, mu), formatReadResult)
 
 	// Attempt to read path outside the root to force an error.
-	res, err := h(context.Background(), mcp.CallToolRequest{
+	res, err := h(ctx, mcp.CallToolRequest{
 		Params: mcp.CallToolParams{Arguments: map[string]any{"path": "../outside"}},
 	})
 	if err != nil {
@@ -33,10 +33,11 @@ func TestCompatWrapTextHandlerPropagatesErrors(t *testing.T) {
 // Test that wrapTextHandler returns an error result when argument binding fails.
 func TestWrapTextHandlerBindingError(t *testing.T) {
 	root := t.TempDir()
-	h := wrapTextHandler(handleRead(root), formatReadResult)
+	ctx, sessions, mu := testSession(root)
+	h := wrapTextHandler(handleRead(sessions, mu), formatReadResult)
 
 	// Provide invalid argument type to trigger binding error.
-	res, err := h(context.Background(), mcp.CallToolRequest{
+	res, err := h(ctx, mcp.CallToolRequest{
 		Params: mcp.CallToolParams{Arguments: map[string]any{"path": 123}},
 	})
 	if err != nil {
@@ -53,9 +54,10 @@ func TestStructuredHandlerOmitsTextContent(t *testing.T) {
 	if err := os.WriteFile(p, []byte("hi"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h := wrapStructuredHandler(handleRead(root))
+	ctx, sessions, mu := testSession(root)
+	h := wrapStructuredHandler(handleRead(sessions, mu))
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{"path": "f.txt"}}}
-	res, err := h(context.Background(), req)
+	res, err := h(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,9 +72,10 @@ func TestStructuredHandlerOmitsTextContent(t *testing.T) {
 // Test that wrapStructuredHandler returns an error result when argument binding fails.
 func TestWrapStructuredHandlerBindingError(t *testing.T) {
 	root := t.TempDir()
-	h := wrapStructuredHandler(handleRead(root))
+	ctx, sessions, mu := testSession(root)
+	h := wrapStructuredHandler(handleRead(sessions, mu))
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{"path": 123}}}
-	res, err := h(context.Background(), req)
+	res, err := h(ctx, req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

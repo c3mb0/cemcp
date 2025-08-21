@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,8 +10,9 @@ import (
 
 func TestWrite_PathAndMode(t *testing.T) {
 	root := t.TempDir()
-	wr := handleWrite(root)
-	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "m/sub/file.txt", Content: "hello", Mode: "0640"})
+	ctx, sessions, mu := testSession(root)
+	wr := handleWrite(sessions, mu)
+	res, err := wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "m/sub/file.txt", Content: "hello", Mode: "0640"})
 	if err != nil {
 		t.Fatal(err)
 	}

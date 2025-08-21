@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -12,9 +13,18 @@ import (
 
 func TestWriteReadIntegration(t *testing.T) {
 	root := t.TempDir()
+	sessions := map[string]*SessionState{"s1": {Root: root}}
+	var mu sync.RWMutex
+	manager := &sessionManager{id: "s1"}
+	addSession := func(h server.ToolHandlerFunc) server.ToolHandlerFunc {
+		return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			ctx = withSessionManager(ctx, manager)
+			return h(ctx, req)
+		}
+	}
 	srv, err := mcptest.NewServer(t,
-		server.ServerTool{Tool: mcp.NewTool("fs_write"), Handler: wrapStructuredHandler(handleWrite(root))},
-		server.ServerTool{Tool: mcp.NewTool("fs_read"), Handler: mcp.NewStructuredToolHandler(handleRead(root))},
+		server.ServerTool{Tool: mcp.NewTool("fs_write"), Handler: addSession(wrapStructuredHandler(handleWrite(sessions, &mu)))},
+		server.ServerTool{Tool: mcp.NewTool("fs_read"), Handler: addSession(mcp.NewStructuredToolHandler(handleRead(sessions, &mu)))},
 	)
 	if err != nil {
 		t.Fatalf("server start failed: %v", err)
@@ -56,8 +66,17 @@ func TestWriteReadIntegration(t *testing.T) {
 
 func TestWriteErrorResponse(t *testing.T) {
 	root := t.TempDir()
+	sessions := map[string]*SessionState{"s1": {Root: root}}
+	var mu sync.RWMutex
+	manager := &sessionManager{id: "s1"}
+	addSession := func(h server.ToolHandlerFunc) server.ToolHandlerFunc {
+		return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			ctx = withSessionManager(ctx, manager)
+			return h(ctx, req)
+		}
+	}
 	srv, err := mcptest.NewServer(t,
-		server.ServerTool{Tool: mcp.NewTool("fs_write", mcp.WithOutputSchema[WriteResult]()), Handler: wrapStructuredHandler(handleWrite(root))},
+		server.ServerTool{Tool: mcp.NewTool("fs_write", mcp.WithOutputSchema[WriteResult]()), Handler: addSession(wrapStructuredHandler(handleWrite(sessions, &mu)))},
 	)
 	if err != nil {
 		t.Fatalf("server start failed: %v", err)
