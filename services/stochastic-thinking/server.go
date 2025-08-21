@@ -161,6 +161,55 @@ Supports various algorithms including:
 		return out, nil
 	})
 
+	examplesTool := mcp.NewTool(
+		"stochasticexamples",
+		mcp.WithDescription("Sample requests for each stochastic algorithm"),
+	)
+	s.AddTool(examplesTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		examples := []map[string]any{
+			{
+				"algorithm": "mdp",
+				"problem":   "navigate grid",
+				"mdp": map[string]any{
+					"gamma":  0.9,
+					"states": 4,
+				},
+			},
+			{
+				"algorithm": "mcts",
+				"problem":   "choose move",
+				"mcts": map[string]any{
+					"simulations":         1000,
+					"explorationConstant": 1.4,
+				},
+			},
+			{
+				"algorithm": "bandit",
+				"problem":   "select ad",
+				"bandit": map[string]any{
+					"strategy": "epsilon_greedy",
+					"epsilon":  0.1,
+				},
+			},
+			{
+				"algorithm": "bayesian",
+				"problem":   "tune parameter",
+				"bayesian": map[string]any{
+					"acquisitionFunction": "ucb",
+				},
+			},
+			{
+				"algorithm": "hmm",
+				"problem":   "infer weather",
+				"hmm": map[string]any{
+					"algorithm": "viterbi",
+				},
+			},
+		}
+		b, _ := json.MarshalIndent(examples, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+
 	return s
 }
 

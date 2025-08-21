@@ -191,6 +191,7 @@ func setupServer() *server.MCPServer {
 	registerTrimSession(s, session)
 	registerSessionContext(s, session)
 	registerSearchContext(s, session)
+	registerClearThoughtExamples(s)
 
 	return s
 }
@@ -740,6 +741,49 @@ func registerSearchContext(srv *server.MCPServer, state *SessionState) {
 			"nextOffset": nextOffset,
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerClearThoughtExamples(srv *server.MCPServer) {
+	tool := mcp.NewTool(
+		"clearthoughtexamples",
+		mcp.WithDescription("Sample requests for sequentialthinking, mentalmodel, and debuggingapproach"),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		examples := []map[string]any{
+			{
+				"tool": "sequentialthinking",
+				"args": map[string]any{
+					"thought":           "outline solution",
+					"thoughtNumber":     1,
+					"totalThoughts":     2,
+					"nextThoughtNeeded": true,
+				},
+			},
+			{
+				"tool": "mentalmodel",
+				"args": map[string]any{
+					"modelName":  "first_principles",
+					"problem":    "reduce load time",
+					"steps":      []string{"break into parts", "optimize each"},
+					"reasoning":  "start from basics",
+					"conclusion": "cache assets",
+				},
+			},
+			{
+				"tool": "debuggingapproach",
+				"args": map[string]any{
+					"approachName": "binary_search",
+					"issue":        "crash on launch",
+					"steps":        []string{"split code", "test halves"},
+					"findings":     "bad init sequence",
+					"resolution":   "fix order",
+				},
+			},
+		}
+		b, _ := json.MarshalIndent(examples, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
