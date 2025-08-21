@@ -91,7 +91,7 @@ func (s *SessionState) AddThought(t ThoughtData) bool {
 }
 
 func (s *SessionState) GetThoughts() []ThoughtData { return s.thoughts }
-func (s *SessionState) GetRemainingThoughts() int {
+func (s *SessionState) GetRemainingCapacity() int {
 	return s.config.MaxThoughtsPerSession - len(s.thoughts)
 }
 
@@ -191,7 +191,7 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			"sessionContext": map[string]any{
 				"sessionId":         state.SessionID(),
 				"totalThoughts":     len(all),
-				"remainingThoughts": state.GetRemainingThoughts(),
+				"remainingCapacity": state.GetRemainingCapacity(),
 				"recentThoughts":    recent,
 			},
 		}
@@ -523,7 +523,7 @@ func registerResetSession(srv *server.MCPServer, state *SessionState) {
 			"status": "success",
 			"sessionContext": map[string]any{
 				"sessionId":         state.SessionID(),
-				"remainingThoughts": state.GetRemainingThoughts(),
+				"remainingCapacity": state.GetRemainingCapacity(),
 			},
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
