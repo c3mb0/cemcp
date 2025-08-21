@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/c3mb0/cemcp/pkg/stochastic"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -63,6 +64,31 @@ type SessionState struct {
 
 func NewSessionState(id string, cfg ServerConfig) *SessionState {
 	return &SessionState{sessionID: id, config: cfg, branches: make(map[string]*int)}
+}
+
+var sessionStates sync.Map
+
+func getSessionState(ctx context.Context) (*SessionState, error) {
+	if sess := server.ClientSessionFromContext(ctx); sess != nil {
+		if v, ok := sessionStates.Load(sess.SessionID()); ok {
+			if state, ok := v.(*SessionState); ok {
+				return state, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("session state not found")
+}
+
+func withSession(handler func(context.Context, mcp.CallToolRequest, *SessionState) (*mcp.CallToolResult, error)) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		state, err := getSessionState(ctx)
+		if err != nil {
+			out := mcp.NewToolResultText(err.Error())
+			out.IsError = true
+			return out, nil
+		}
+		return handler(ctx, req, state)
+	}
 }
 
 func (s *SessionState) RegisterBranch(id string, from *int) error {
@@ -174,28 +200,35 @@ func (s *SessionState) Reset() {
 
 // Server setup and handlers
 
-func setupServer() *server.MCPServer {
-	s := server.NewMCPServer("clear-thought", "0.0.5")
-	session := NewSessionState("default", defaultConfig)
+func setupServer(sessionID string, cfg ServerConfig) *server.MCPServer {
+	hooks := &server.Hooks{}
+	hooks.AddOnRegisterSession(func(ctx context.Context, sess server.ClientSession) {
+		sessionStates.Store(sess.SessionID(), NewSessionState(sessionID, cfg))
+	})
+	hooks.AddOnUnregisterSession(func(ctx context.Context, sess server.ClientSession) {
+		sessionStates.Delete(sess.SessionID())
+	})
 
-	registerSequentialThinking(s, session)
-	registerUpdateThought(s, session)
-	registerRetractThought(s, session)
-	registerGetBranch(s, session)
-	registerMentalModel(s, session)
-	registerDebuggingApproach(s, session)
-	registerGetThoughts(s, session)
-	registerGetMentalModels(s, session)
-	registerGetDebuggingSessions(s, session)
-	registerResetSession(s, session)
-	registerTrimSession(s, session)
-	registerSessionContext(s, session)
-	registerSearchContext(s, session)
+	s := server.NewMCPServer("clear-thought", "0.0.5", server.WithHooks(hooks))
+
+	registerSequentialThinking(s)
+	registerUpdateThought(s)
+	registerRetractThought(s)
+	registerGetBranch(s)
+	registerMentalModel(s)
+	registerDebuggingApproach(s)
+	registerGetThoughts(s)
+	registerGetMentalModels(s)
+	registerGetDebuggingSessions(s)
+	registerResetSession(s)
+	registerTrimSession(s)
+	registerSessionContext(s)
+	registerSearchContext(s)
 
 	return s
 }
 
-func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
+func registerSequentialThinking(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"sequentialthinking",
 		mcp.WithDescription("Process sequential thoughts with branching, revision, and memory management capabilities"),
@@ -210,7 +243,7 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 		mcp.WithBoolean("needsMoreThoughts", mcp.Description("Whether more thoughts are needed")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args ThoughtData
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
@@ -285,10 +318,10 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerUpdateThought(srv *server.MCPServer, state *SessionState) {
+func registerUpdateThought(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"updatethought",
 		mcp.WithDescription("Update an existing thought by its number"),
@@ -296,7 +329,7 @@ func registerUpdateThought(srv *server.MCPServer, state *SessionState) {
 		mcp.WithString("thought", mcp.Required(), mcp.Description("Updated thought content")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args struct {
 			ThoughtNumber int    `json:"thoughtNumber"`
 			Thought       string `json:"thought"`
@@ -330,16 +363,16 @@ func registerUpdateThought(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerRetractThought(srv *server.MCPServer, state *SessionState) {
+func registerRetractThought(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"retractthought",
 		mcp.WithDescription("Remove the most recent thought"),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		t, ok := state.RetractThought()
 		if !ok {
 			errResp := map[string]any{"error": "no thoughts to retract", "status": "empty"}
@@ -357,17 +390,17 @@ func registerRetractThought(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerGetBranch(srv *server.MCPServer, state *SessionState) {
+func registerGetBranch(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"getbranch",
 		mcp.WithDescription("Retrieve the sequence of thoughts for a given branch"),
 		mcp.WithString("branchId", mcp.Required(), mcp.Description("Branch identifier")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args struct {
 			BranchID string `json:"branchId"`
 		}
@@ -400,10 +433,10 @@ func registerGetBranch(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerMentalModel(srv *server.MCPServer, state *SessionState) {
+func registerMentalModel(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"mentalmodel",
 		mcp.WithDescription("Apply mental models to analyze problems systematically"),
@@ -414,7 +447,7 @@ func registerMentalModel(srv *server.MCPServer, state *SessionState) {
 		mcp.WithString("conclusion", mcp.Required(), mcp.Description("Conclusions drawn")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args MentalModelData
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
@@ -440,10 +473,10 @@ func registerMentalModel(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerDebuggingApproach(srv *server.MCPServer, state *SessionState) {
+func registerDebuggingApproach(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"debuggingapproach",
 		mcp.WithDescription("Apply systematic debugging approaches to identify and resolve issues"),
@@ -456,7 +489,7 @@ func registerDebuggingApproach(srv *server.MCPServer, state *SessionState) {
 		mcp.WithString("resolution", mcp.Required(), mcp.Description("How the issue was resolved")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args DebuggingApproachData
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
@@ -485,10 +518,10 @@ func registerDebuggingApproach(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerGetThoughts(srv *server.MCPServer, state *SessionState) {
+func registerGetThoughts(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"getthoughts",
 		mcp.WithDescription("Retrieve stored thoughts with optional pagination"),
@@ -496,7 +529,7 @@ func registerGetThoughts(srv *server.MCPServer, state *SessionState) {
 		mcp.WithNumber("limit", mcp.Description("Maximum number of thoughts to return")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args struct {
 			Offset *int `json:"offset"`
 			Limit  *int `json:"limit"`
@@ -531,10 +564,10 @@ func registerGetThoughts(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerGetMentalModels(srv *server.MCPServer, state *SessionState) {
+func registerGetMentalModels(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"getmentalmodels",
 		mcp.WithDescription("Retrieve stored mental models with optional pagination"),
@@ -542,7 +575,7 @@ func registerGetMentalModels(srv *server.MCPServer, state *SessionState) {
 		mcp.WithNumber("limit", mcp.Description("Maximum number of models to return")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args struct {
 			Offset *int `json:"offset"`
 			Limit  *int `json:"limit"`
@@ -577,10 +610,10 @@ func registerGetMentalModels(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
+func registerGetDebuggingSessions(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"getdebuggingsessions",
 		mcp.WithDescription("Retrieve stored debugging sessions with optional pagination"),
@@ -588,7 +621,7 @@ func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
 		mcp.WithNumber("limit", mcp.Description("Maximum number of sessions to return")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args struct {
 			Offset *int `json:"offset"`
 			Limit  *int `json:"limit"`
@@ -623,16 +656,16 @@ func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerSessionContext(srv *server.MCPServer, state *SessionState) {
+func registerSessionContext(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"sessioncontext",
 		mcp.WithDescription("Summarize session status with counts and recent entries for thoughts, mental models, and debugging sessions"),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		thoughts := state.GetThoughts()
 		models := state.GetMentalModels()
 		debug := state.GetDebuggingSessions()
@@ -648,10 +681,10 @@ func registerSessionContext(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerSearchContext(srv *server.MCPServer, state *SessionState) {
+func registerSearchContext(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"searchcontext",
 		mcp.WithDescription("Search thoughts, mental models, and debugging sessions"),
@@ -659,7 +692,7 @@ func registerSearchContext(srv *server.MCPServer, state *SessionState) {
 		mcp.WithNumber("offset", mcp.Description("Starting index for paginated results")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args struct {
 			Query  string `json:"query"`
 			Offset *int   `json:"offset"`
@@ -741,16 +774,16 @@ func registerSearchContext(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerResetSession(srv *server.MCPServer, state *SessionState) {
+func registerResetSession(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"resetsession",
 		mcp.WithDescription("Clear all stored thoughts, mental models, and debugging sessions, resetting the session to its initial state"),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		state.Reset()
 		res := map[string]any{
 			"status":            "reset",
@@ -758,17 +791,17 @@ func registerResetSession(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
-func registerTrimSession(srv *server.MCPServer, state *SessionState) {
+func registerTrimSession(srv *server.MCPServer) {
 	tool := mcp.NewTool(
 		"trimsession",
 		mcp.WithDescription("Trim stored thoughts keeping only the most recent ones"),
 		mcp.WithNumber("keepLast", mcp.Required(), mcp.Description("Number of recent thoughts to keep")),
 	)
 
-	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, withSession(func(ctx context.Context, req mcp.CallToolRequest, state *SessionState) (*mcp.CallToolResult, error) {
 		var args struct {
 			KeepLast int `json:"keepLast"`
 		}
@@ -787,7 +820,7 @@ func registerTrimSession(srv *server.MCPServer, state *SessionState) {
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
-	})
+	}))
 }
 
 // helpers
