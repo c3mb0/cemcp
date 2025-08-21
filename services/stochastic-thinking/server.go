@@ -68,9 +68,14 @@ Supports various algorithms including:
 	)
 
 	s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		const hint = "Run again with result populated to verify outcomes."
 		var args StochasticArgs
 		if err := req.BindArguments(&args); err != nil {
-			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			errResp := map[string]any{
+				"error":  err.Error(),
+				"status": "failed",
+				"hint":   hint,
+			}
 			b, _ := json.MarshalIndent(errResp, "", "  ")
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
@@ -78,7 +83,11 @@ Supports various algorithms including:
 		}
 
 		if err := validateArgs(&args); err != nil {
-			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			errResp := map[string]any{
+				"error":  err.Error(),
+				"status": "failed",
+				"hint":   hint,
+			}
 			b, _ := json.MarshalIndent(errResp, "", "  ")
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
@@ -93,6 +102,7 @@ Supports various algorithms including:
 			"summary":   summary,
 			"hasResult": args.Result != "",
 			"nextSteps": nextSteps,
+			"hint":      hint,
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		out := mcp.NewToolResultText(string(b))

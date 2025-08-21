@@ -176,20 +176,26 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 	)
 
 	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		expected := len(state.GetThoughts()) + 1
+		hint := fmt.Sprintf("Submit thought #%d if continuing.", expected)
 		var args ThoughtData
 		if err := req.BindArguments(&args); err != nil {
-			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			errResp := map[string]any{
+				"error":  err.Error(),
+				"status": "failed",
+				"hint":   hint,
+			}
 			b, _ := json.MarshalIndent(errResp, "", "  ")
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
 		}
-		expected := len(state.GetThoughts()) + 1
 		if args.ThoughtNumber != expected {
 			errResp := map[string]any{
 				"error":                 fmt.Sprintf("thoughtNumber must be %d but got %d", expected, args.ThoughtNumber),
 				"expectedThoughtNumber": expected,
 				"status":                "failed",
+				"hint":                  hint,
 			}
 			b, _ := json.MarshalIndent(errResp, "", "  ")
 			out := mcp.NewToolResultText(string(b))
@@ -197,14 +203,22 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			return out, nil
 		}
 		if args.IsRevision != nil && args.RevisesThought == nil {
-			errResp := map[string]any{"error": "revisesThought is required when isRevision is set", "status": "failed"}
+			errResp := map[string]any{
+				"error":  "revisesThought is required when isRevision is set",
+				"status": "failed",
+				"hint":   hint,
+			}
 			b, _ := json.MarshalIndent(errResp, "", "  ")
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
 		}
 		if args.BranchFromThought != nil && args.BranchID == nil {
-			errResp := map[string]any{"error": "branchId is required when branchFromThought is provided", "status": "failed"}
+			errResp := map[string]any{
+				"error":  "branchId is required when branchFromThought is provided",
+				"status": "failed",
+				"hint":   hint,
+			}
 			b, _ := json.MarshalIndent(errResp, "", "  ")
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
@@ -212,7 +226,11 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 		}
 		if args.BranchID != nil {
 			if err := state.RegisterBranch(*args.BranchID, args.BranchFromThought); err != nil {
-				errResp := map[string]any{"error": err.Error(), "status": "failed"}
+				errResp := map[string]any{
+					"error":  err.Error(),
+					"status": "failed",
+					"hint":   hint,
+				}
 				b, _ := json.MarshalIndent(errResp, "", "  ")
 				out := mcp.NewToolResultText(string(b))
 				out.IsError = true
@@ -232,6 +250,7 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 		if summary != "" {
 			sessionCtx["summary"] = summary
 		}
+		nextExpected := len(all) + 1
 		res := map[string]any{
 			"thought":           args.Thought,
 			"thoughtNumber":     args.ThoughtNumber,
@@ -244,6 +263,7 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			"needsMoreThoughts": args.NeedsMoreThoughts,
 			"status":            map[bool]string{true: "success", false: "limit_reached"}[added],
 			"sessionContext":    sessionCtx,
+			"hint":              fmt.Sprintf("Submit thought #%d if continuing.", nextExpected),
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
