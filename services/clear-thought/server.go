@@ -164,6 +164,14 @@ func (s *SessionState) TrimThoughts(keepLast int) (removed, remaining int) {
 	return removed, len(s.thoughts)
 }
 
+func (s *SessionState) Reset() {
+	s.thoughts = nil
+	s.mentalModels = nil
+	s.debuggingSessions = nil
+	s.branches = make(map[string]*int)
+	s.summaries = nil
+}
+
 // Server setup and handlers
 
 func setupServer() *server.MCPServer {
@@ -179,6 +187,7 @@ func setupServer() *server.MCPServer {
 	registerGetThoughts(s, session)
 	registerGetMentalModels(s, session)
 	registerGetDebuggingSessions(s, session)
+	registerResetSession(s, session)
 	registerTrimSession(s, session)
 	registerSessionContext(s, session)
 	registerSearchContext(s, session)
@@ -729,6 +738,23 @@ func registerSearchContext(srv *server.MCPServer, state *SessionState) {
 			"limit":      limit,
 			"results":    items,
 			"nextOffset": nextOffset,
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerResetSession(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"resetsession",
+		mcp.WithDescription("Clear all stored thoughts, mental models, and debugging sessions, resetting the session to its initial state"),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		state.Reset()
+		res := map[string]any{
+			"status":            "reset",
+			"remainingThoughts": state.GetRemainingThoughts(),
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
