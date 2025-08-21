@@ -520,9 +520,11 @@ func registerResetSession(srv *server.MCPServer, state *SessionState) {
 	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		state.Reset()
 		res := map[string]any{
-			"status":            "success",
-			"sessionId":         state.SessionID(),
-			"remainingCapacity": state.GetRemainingThoughts(),
+			"status": "success",
+			"sessionContext": map[string]any{
+				"sessionId":         state.SessionID(),
+				"remainingThoughts": state.GetRemainingThoughts(),
+			},
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
