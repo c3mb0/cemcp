@@ -43,6 +43,12 @@ type DebuggingApproachData struct {
 	Resolution   string   `json:"resolution"`
 }
 
+type Goal struct {
+	Description string `json:"description"`
+	Completed   bool   `json:"completed"`
+	Notes       string `json:"notes,omitempty"`
+}
+
 // Session state
 
 type ServerConfig struct {
@@ -57,6 +63,7 @@ type SessionState struct {
 	thoughts          []ThoughtData
 	mentalModels      []MentalModelData
 	debuggingSessions []DebuggingApproachData
+	goals             []Goal
 	branches          map[string]*int
 	summaries         []string
 }
@@ -164,6 +171,34 @@ func (s *SessionState) TrimThoughts(keepLast int) (removed, remaining int) {
 	return removed, len(s.thoughts)
 }
 
+func (s *SessionState) AddGoal(g Goal) { s.goals = append(s.goals, g) }
+
+func (s *SessionState) UpdateGoal(num int, completed *bool, notes *string) (*Goal, bool) {
+	idx := num - 1
+	if idx < 0 || idx >= len(s.goals) {
+		return nil, false
+	}
+	if completed != nil {
+		s.goals[idx].Completed = *completed
+	}
+	if notes != nil {
+		s.goals[idx].Notes = *notes
+	}
+	return &s.goals[idx], true
+}
+
+func (s *SessionState) GetGoals() []Goal { return s.goals }
+
+func (s *SessionState) GetOutstandingGoals() []Goal {
+	out := make([]Goal, 0)
+	for _, g := range s.goals {
+		if !g.Completed {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
 // Server setup and handlers
 
 func setupServer() *server.MCPServer {
@@ -176,6 +211,8 @@ func setupServer() *server.MCPServer {
 	registerGetBranch(s, session)
 	registerMentalModel(s, session)
 	registerDebuggingApproach(s, session)
+	registerAddGoal(s, session)
+	registerUpdateGoal(s, session)
 	registerGetThoughts(s, session)
 	registerGetMentalModels(s, session)
 	registerGetDebuggingSessions(s, session)
@@ -253,6 +290,7 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			"totalThoughts":     len(all),
 			"remainingThoughts": state.GetRemainingThoughts(),
 			"recentThoughts":    recent,
+			"outstandingGoals":  state.GetOutstandingGoals(),
 		}
 		if summary != "" {
 			sessionCtx["summary"] = summary
@@ -315,8 +353,9 @@ func registerUpdateThought(srv *server.MCPServer, state *SessionState) {
 			"updated":       true,
 			"status":        "success",
 			"sessionContext": map[string]any{
-				"sessionId":      state.SessionID(),
-				"updatedThought": updated,
+				"sessionId":        state.SessionID(),
+				"updatedThought":   updated,
+				"outstandingGoals": state.GetOutstandingGoals(),
 			},
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
@@ -427,6 +466,7 @@ func registerMentalModel(srv *server.MCPServer, state *SessionState) {
 				"sessionId":         state.SessionID(),
 				"totalMentalModels": len(all),
 				"recentModels":      recent,
+				"outstandingGoals":  state.GetOutstandingGoals(),
 			},
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
@@ -472,6 +512,91 @@ func registerDebuggingApproach(srv *server.MCPServer, state *SessionState) {
 				"sessionId":                state.SessionID(),
 				"totalDebuggingApproaches": len(state.GetDebuggingSessions()),
 				"recentApproaches":         recent,
+				"outstandingGoals":         state.GetOutstandingGoals(),
+			},
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerAddGoal(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"addgoal",
+		mcp.WithDescription("Add a new goal for the session"),
+		mcp.WithString("description", mcp.Required(), mcp.Description("Goal description")),
+		mcp.WithString("notes", mcp.Description("Optional notes")),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			Description string `json:"description"`
+			Notes       string `json:"notes"`
+		}
+		if err := req.BindArguments(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		g := Goal{Description: args.Description, Notes: args.Notes}
+		state.AddGoal(g)
+		res := map[string]any{
+			"goalNumber": len(state.GetGoals()),
+			"status":     "success",
+			"sessionContext": map[string]any{
+				"sessionId":        state.SessionID(),
+				"outstandingGoals": state.GetOutstandingGoals(),
+				"totalGoals":       len(state.GetGoals()),
+			},
+		}
+		b, _ := json.MarshalIndent(res, "", "  ")
+		return mcp.NewToolResultText(string(b)), nil
+	})
+}
+
+func registerUpdateGoal(srv *server.MCPServer, state *SessionState) {
+	tool := mcp.NewTool(
+		"updategoal",
+		mcp.WithDescription("Update an existing goal's completion status or notes"),
+		mcp.WithNumber("goalNumber", mcp.Required(), mcp.Description("Goal number starting from 1")),
+		mcp.WithBoolean("completed", mcp.Description("Mark goal as completed")),
+		mcp.WithString("notes", mcp.Description("Update notes")),
+	)
+
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			GoalNumber int     `json:"goalNumber"`
+			Completed  *bool   `json:"completed"`
+			Notes      *string `json:"notes"`
+		}
+		if err := req.BindArguments(&args); err != nil {
+			errResp := map[string]any{"error": err.Error(), "status": "failed"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		g, ok := state.UpdateGoal(args.GoalNumber, args.Completed, args.Notes)
+		if !ok {
+			errResp := map[string]any{"error": fmt.Sprintf("goal %d not found", args.GoalNumber), "status": "not_found"}
+			b, _ := json.MarshalIndent(errResp, "", "  ")
+			out := mcp.NewToolResultText(string(b))
+			out.IsError = true
+			return out, nil
+		}
+
+		res := map[string]any{
+			"goalNumber": args.GoalNumber,
+			"goal":       g,
+			"status":     "success",
+			"sessionContext": map[string]any{
+				"sessionId":        state.SessionID(),
+				"outstandingGoals": state.GetOutstandingGoals(),
+				"totalGoals":       len(state.GetGoals()),
 			},
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
@@ -627,6 +752,7 @@ func registerSessionContext(srv *server.MCPServer, state *SessionState) {
 		thoughts := state.GetThoughts()
 		models := state.GetMentalModels()
 		debug := state.GetDebuggingSessions()
+		goals := state.GetGoals()
 		res := map[string]any{
 			"sessionId":               state.SessionID(),
 			"totalThoughts":           len(thoughts),
@@ -636,6 +762,8 @@ func registerSessionContext(srv *server.MCPServer, state *SessionState) {
 			"recentMentalModels":      lastModels(models, 3),
 			"totalDebuggingSessions":  len(debug),
 			"recentDebuggingSessions": lastDebugging(debug, 3),
+			"totalGoals":              len(goals),
+			"outstandingGoals":        state.GetOutstandingGoals(),
 		}
 		b, _ := json.MarshalIndent(res, "", "  ")
 		return mcp.NewToolResultText(string(b)), nil
