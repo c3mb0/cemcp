@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -15,10 +16,15 @@ func formatReadResult(r ReadResult) string {
 	return fmt.Sprintf("path=%s size=%d mime=%s sha=%s truncated=%v content=%s", r.Path, r.Size, r.MIMEType, r.SHA256, r.Truncated, r.Content)
 }
 
-func handleRead(root string) mcp.StructuredToolHandlerFunc[ReadArgs, ReadResult] {
+func handleRead(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[ReadArgs, ReadResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args ReadArgs) (ReadResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return ReadResult{}, err
+		}
+		root := state.Root
 		start := time.Now()
-		dprintf("-> fs_read path=%q max_bytes=%d", args.Path, args.MaxBytes)
+		dprintf("%s -> fs_read path=%q max_bytes=%d", sessionContext(ctx), args.Path, args.MaxBytes)
 		var res ReadResult
 		full, err := safeJoinResolveFinal(root, args.Path)
 		if err != nil {

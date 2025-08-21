@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,10 +14,15 @@ func formatMkdirResult(r MkdirResult) string {
 	return fmt.Sprintf("path=%s created=%v mode=%s modified_at=%s", r.Path, r.Created, r.Mode, r.ModifiedAt)
 }
 
-func handleMkdir(root string) mcp.StructuredToolHandlerFunc[MkdirArgs, MkdirResult] {
+func handleMkdir(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[MkdirArgs, MkdirResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args MkdirArgs) (MkdirResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return MkdirResult{}, err
+		}
+		root := state.Root
 		start := time.Now()
-		dprintf("-> fs_mkdir path=%q mode=%s", args.Path, args.Mode)
+		dprintf("%s -> fs_mkdir path=%q mode=%s", sessionContext(ctx), args.Path, args.Mode)
 		var out MkdirResult
 		paths := expandBraces(args.Path)
 		mode, err := parseMode(args.Mode)

@@ -52,10 +52,15 @@ func formatSearchResult(r SearchResult) string {
 	return b.String()
 }
 
-func handleSearch(root string) mcp.StructuredToolHandlerFunc[SearchArgs, SearchResult] {
+func handleSearch(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[SearchArgs, SearchResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args SearchArgs) (SearchResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return SearchResult{}, err
+		}
+		root := state.Root
 		start := time.Now()
-		dprintf("-> fs_search path=%q pattern=%q regex=%v max=%d", args.Path, args.Pattern, args.Regex, args.MaxResults)
+		dprintf("%s -> fs_search path=%q pattern=%q regex=%v max=%d", sessionContext(ctx), args.Path, args.Pattern, args.Regex, args.MaxResults)
 
 		var out SearchResult
 		if args.Pattern == "" {

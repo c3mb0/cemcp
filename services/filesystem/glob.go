@@ -18,10 +18,15 @@ func formatGlobResult(r GlobResult) string {
 	return strings.Join(r.Matches, "\n")
 }
 
-func handleGlob(root string) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult] {
+func handleGlob(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[GlobArgs, GlobResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args GlobArgs) (GlobResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return GlobResult{}, err
+		}
+		root := state.Root
 		start := time.Now()
-		dprintf("-> fs_glob pattern=%q max_results=%d", args.Pattern, args.MaxResults)
+		dprintf("%s -> fs_glob pattern=%q max_results=%d", sessionContext(ctx), args.Pattern, args.MaxResults)
 		var out GlobResult
 		if args.Pattern == "" {
 			return out, errors.New("pattern required")
