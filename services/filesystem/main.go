@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -23,7 +24,10 @@ func main() {
 	dprintf("server start root=%q debug=%v", root, debugEnabled)
 
 	s := setupServer(root)
-	if err := server.ServeStdio(s); err != nil {
+	mgr := &sessionManager{id: "default"}
+	if err := server.ServeStdio(s, server.WithStdioContextFunc(func(ctx context.Context) context.Context {
+		return withSessionManager(ctx, mgr)
+	})); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "server error: %v\n", err)
 		dprintf("server error: %v", err)
 		os.Exit(1)

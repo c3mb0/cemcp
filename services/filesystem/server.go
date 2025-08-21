@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"strings"
+	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -51,6 +53,11 @@ func setupServer(root string) *server.MCPServer {
 	s := server.NewMCPServer("fs-mcp-go", "0.1.0")
 	server.WithToolHandlerMiddleware(sessionMiddleware())(s)
 
+	sessions := map[string]*SessionState{
+		"default": {Root: root},
+	}
+	var mu sync.RWMutex
+
 	readOpts := []mcp.ToolOption{
 		mcp.WithDescription("Read a file up to a byte limit."),
 		mcp.WithString("path", mcp.Required(), mcp.Description("File path or file:// URI within base folder")),
@@ -61,9 +68,9 @@ func setupServer(root string) *server.MCPServer {
 	}
 	readTool := mcp.NewTool("fs_read", readOpts...)
 	if *compatFlag {
-		s.AddTool(readTool, wrapTextHandler(handleRead(root), formatReadResult))
+		s.AddTool(readTool, wrapTextHandler(handleRead(sessions, &mu), formatReadResult))
 	} else {
-		s.AddTool(readTool, wrapStructuredHandler(handleRead(root)))
+		s.AddTool(readTool, wrapStructuredHandler(handleRead(sessions, &mu)))
 	}
 
 	peekOpts := []mcp.ToolOption{
@@ -77,9 +84,9 @@ func setupServer(root string) *server.MCPServer {
 	}
 	peekTool := mcp.NewTool("fs_peek", peekOpts...)
 	if *compatFlag {
-		s.AddTool(peekTool, wrapTextHandler(handlePeek(root), formatPeekResult))
+		s.AddTool(peekTool, wrapTextHandler(handlePeek(sessions, &mu), formatPeekResult))
 	} else {
-		s.AddTool(peekTool, wrapStructuredHandler(handlePeek(root)))
+		s.AddTool(peekTool, wrapStructuredHandler(handlePeek(sessions, &mu)))
 	}
 
 	writeOpts := []mcp.ToolOption{
@@ -96,9 +103,9 @@ func setupServer(root string) *server.MCPServer {
 	}
 	writeTool := mcp.NewTool("fs_write", writeOpts...)
 	if *compatFlag {
-		s.AddTool(writeTool, wrapTextHandler(handleWrite(root), formatWriteResult))
+		s.AddTool(writeTool, wrapTextHandler(handleWrite(sessions, &mu), formatWriteResult))
 	} else {
-		s.AddTool(writeTool, wrapStructuredHandler(handleWrite(root)))
+		s.AddTool(writeTool, wrapStructuredHandler(handleWrite(sessions, &mu)))
 	}
 
 	editOpts := []mcp.ToolOption{
@@ -114,9 +121,9 @@ func setupServer(root string) *server.MCPServer {
 	}
 	editTool := mcp.NewTool("fs_edit", editOpts...)
 	if *compatFlag {
-		s.AddTool(editTool, wrapTextHandler(handleEdit(root), formatEditResult))
+		s.AddTool(editTool, wrapTextHandler(handleEdit(sessions, &mu), formatEditResult))
 	} else {
-		s.AddTool(editTool, wrapStructuredHandler(handleEdit(root)))
+		s.AddTool(editTool, wrapStructuredHandler(handleEdit(sessions, &mu)))
 	}
 
 	listOpts := []mcp.ToolOption{
@@ -130,9 +137,9 @@ func setupServer(root string) *server.MCPServer {
 	}
 	listTool := mcp.NewTool("fs_list", listOpts...)
 	if *compatFlag {
-		s.AddTool(listTool, wrapTextHandler(handleList(root), formatListResult))
+		s.AddTool(listTool, wrapTextHandler(handleList(sessions, &mu), formatListResult))
 	} else {
-		s.AddTool(listTool, wrapStructuredHandler(handleList(root)))
+		s.AddTool(listTool, wrapStructuredHandler(handleList(sessions, &mu)))
 	}
 
 	searchOpts := []mcp.ToolOption{
@@ -147,9 +154,9 @@ func setupServer(root string) *server.MCPServer {
 	}
 	searchTool := mcp.NewTool("fs_search", searchOpts...)
 	if *compatFlag {
-		s.AddTool(searchTool, wrapTextHandler(handleSearch(root), formatSearchResult))
+		s.AddTool(searchTool, wrapTextHandler(handleSearch(sessions, &mu), formatSearchResult))
 	} else {
-		s.AddTool(searchTool, wrapStructuredHandler(handleSearch(root)))
+		s.AddTool(searchTool, wrapStructuredHandler(handleSearch(sessions, &mu)))
 	}
 
 	globOpts := []mcp.ToolOption{
@@ -162,9 +169,9 @@ func setupServer(root string) *server.MCPServer {
 	}
 	globTool := mcp.NewTool("fs_glob", globOpts...)
 	if *compatFlag {
-		s.AddTool(globTool, wrapTextHandler(handleGlob(root), formatGlobResult))
+		s.AddTool(globTool, wrapTextHandler(handleGlob(sessions, &mu), formatGlobResult))
 	} else {
-		s.AddTool(globTool, wrapStructuredHandler(handleGlob(root)))
+		s.AddTool(globTool, wrapStructuredHandler(handleGlob(sessions, &mu)))
 	}
 
 	mkdirOpts := []mcp.ToolOption{
@@ -177,9 +184,9 @@ func setupServer(root string) *server.MCPServer {
 	}
 	mkdirTool := mcp.NewTool("fs_mkdir", mkdirOpts...)
 	if *compatFlag {
-		s.AddTool(mkdirTool, wrapTextHandler(handleMkdir(root), formatMkdirResult))
+		s.AddTool(mkdirTool, wrapTextHandler(handleMkdir(sessions, &mu), formatMkdirResult))
 	} else {
-		s.AddTool(mkdirTool, wrapStructuredHandler(handleMkdir(root)))
+		s.AddTool(mkdirTool, wrapStructuredHandler(handleMkdir(sessions, &mu)))
 	}
 
 	rmdirOpts := []mcp.ToolOption{
@@ -192,9 +199,51 @@ func setupServer(root string) *server.MCPServer {
 	}
 	rmdirTool := mcp.NewTool("fs_rmdir", rmdirOpts...)
 	if *compatFlag {
-		s.AddTool(rmdirTool, wrapTextHandler(handleRmdir(root), formatRmdirResult))
+		s.AddTool(rmdirTool, wrapTextHandler(handleRmdir(sessions, &mu), formatRmdirResult))
 	} else {
-		s.AddTool(rmdirTool, wrapStructuredHandler(handleRmdir(root)))
+		s.AddTool(rmdirTool, wrapStructuredHandler(handleRmdir(sessions, &mu)))
+	}
+
+	// Session management tools
+	createOpts := []mcp.ToolOption{
+		mcp.WithDescription("Create a new session"),
+		mcp.WithString("id", mcp.Description("Optional session id")),
+	}
+	if !*compatFlag {
+		createOpts = append(createOpts, mcp.WithOutputSchema[CreateSessionResult]())
+	}
+	createTool := mcp.NewTool("createsession", createOpts...)
+	if *compatFlag {
+		s.AddTool(createTool, wrapTextHandler(handleCreateSession(sessions, &mu), func(r CreateSessionResult) string { return r.ID }))
+	} else {
+		s.AddTool(createTool, wrapStructuredHandler(handleCreateSession(sessions, &mu)))
+	}
+
+	switchOpts := []mcp.ToolOption{
+		mcp.WithDescription("Switch the active session"),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Session id to activate")),
+	}
+	if !*compatFlag {
+		switchOpts = append(switchOpts, mcp.WithOutputSchema[SwitchSessionResult]())
+	}
+	switchTool := mcp.NewTool("switchsession", switchOpts...)
+	if *compatFlag {
+		s.AddTool(switchTool, wrapTextHandler(handleSwitchSession(sessions, &mu), func(r SwitchSessionResult) string { return r.ID }))
+	} else {
+		s.AddTool(switchTool, wrapStructuredHandler(handleSwitchSession(sessions, &mu)))
+	}
+
+	sessListOpts := []mcp.ToolOption{
+		mcp.WithDescription("List available sessions"),
+	}
+	if !*compatFlag {
+		sessListOpts = append(sessListOpts, mcp.WithOutputSchema[ListSessionsResult]())
+	}
+	listSessionsTool := mcp.NewTool("listsessions", sessListOpts...)
+	if *compatFlag {
+		s.AddTool(listSessionsTool, wrapTextHandler(handleListSessions(sessions, &mu), func(r ListSessionsResult) string { return strings.Join(r.Sessions, ",") }))
+	} else {
+		s.AddTool(listSessionsTool, wrapStructuredHandler(handleListSessions(sessions, &mu)))
 	}
 
 	dbgApproachOpts := []mcp.ToolOption{

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -47,13 +48,18 @@ func formatPeekResult(r PeekResult) string {
 	return fmt.Sprintf("path=%s offset=%d size=%d eof=%v content=%s", r.Path, r.Offset, r.Size, r.EOF, r.Content)
 }
 
-func handlePeek(root string) mcp.StructuredToolHandlerFunc[PeekArgs, PeekResult] {
+func handlePeek(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[PeekArgs, PeekResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args PeekArgs) (PeekResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return PeekResult{}, err
+		}
+		root := state.Root
 		start := time.Now()
 		if args.MaxBytes <= 0 {
 			args.MaxBytes = defaultPeekMaxBytes
 		}
-		dprintf("-> fs_peek path=%q offset=%d max_bytes=%d", args.Path, args.Offset, args.MaxBytes)
+		dprintf("%s -> fs_peek path=%q offset=%d max_bytes=%d", sessionContext(ctx), args.Path, args.Offset, args.MaxBytes)
 		var res PeekResult
 		full, err := safeJoinResolveFinal(root, args.Path)
 		if err != nil {

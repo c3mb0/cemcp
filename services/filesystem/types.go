@@ -168,3 +168,29 @@ type RmdirResult struct {
 	Path    string `json:"path" description:"Directory removed"`
 	Removed bool   `json:"removed" description:"Whether directory was removed"`
 }
+
+// CreateSessionArgs defines parameters for creating a new session
+type CreateSessionArgs struct {
+	ID string `json:"id,omitempty" description:"Optional session id"`
+}
+
+// CreateSessionResult contains the created session id
+type CreateSessionResult struct {
+	ID string `json:"id" description:"Created session id"`
+}
+
+// SwitchSessionArgs defines parameters for switching active session
+type SwitchSessionArgs struct {
+	ID string `json:"id" description:"Session id to activate"`
+}
+
+// SwitchSessionResult contains the active session id
+type SwitchSessionResult struct {
+	ID string `json:"id" description:"Active session id"`
+}
+
+// ListSessionsResult lists available sessions and active one
+type ListSessionsResult struct {
+	Sessions []string `json:"sessions" description:"Available session ids"`
+	Active   string   `json:"active" description:"Currently active session id"`
+}

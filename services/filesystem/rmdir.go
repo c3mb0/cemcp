@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,10 +14,15 @@ func formatRmdirResult(r RmdirResult) string {
 	return fmt.Sprintf("path=%s removed=%v", r.Path, r.Removed)
 }
 
-func handleRmdir(root string) mcp.StructuredToolHandlerFunc[RmdirArgs, RmdirResult] {
+func handleRmdir(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[RmdirArgs, RmdirResult] {
 	return func(ctx context.Context, req mcp.CallToolRequest, args RmdirArgs) (RmdirResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return RmdirResult{}, err
+		}
+		root := state.Root
 		start := time.Now()
-		dprintf("-> fs_rmdir path=%q recursive=%v", args.Path, args.Recursive)
+		dprintf("%s -> fs_rmdir path=%q recursive=%v", sessionContext(ctx), args.Path, args.Recursive)
 		var out RmdirResult
 		full, err := safeJoin(root, args.Path)
 		if err != nil {
