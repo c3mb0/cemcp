@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/c3mb0/cemcp/pkg/stochastic"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -231,6 +232,9 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 		}
 		if summary != "" {
 			sessionCtx["summary"] = summary
+		}
+		if ss, err := stochastic.ReadSummary(state.SessionID()); err == nil {
+			sessionCtx["stochasticSummary"] = ss
 		}
 		res := map[string]any{
 			"thought":           args.Thought,
