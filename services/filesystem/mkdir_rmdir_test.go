@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,10 +10,11 @@ import (
 
 func TestMkdirAndRmdir(t *testing.T) {
 	root := t.TempDir()
-	mk := handleMkdir(root)
-	rm := handleRmdir(root)
+	ctx, sessions, mu := testSession(root)
+	mk := handleMkdir(sessions, mu)
+	rm := handleRmdir(sessions, mu)
 
-	res, err := mk(context.Background(), mcp.CallToolRequest{}, MkdirArgs{Path: "a/b", Mode: "755"})
+	res, err := mk(ctx, mcp.CallToolRequest{}, MkdirArgs{Path: "a/b", Mode: "755"})
 	if err != nil || !res.Created {
 		t.Fatalf("mkdir failed: %+v err=%v", res, err)
 	}
@@ -27,7 +27,7 @@ func TestMkdirAndRmdir(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	_, err = rm(context.Background(), mcp.CallToolRequest{}, RmdirArgs{Path: "a", Recursive: true})
+	_, err = rm(ctx, mcp.CallToolRequest{}, RmdirArgs{Path: "a", Recursive: true})
 	if err != nil {
 		t.Fatalf("rmdir failed: %v", err)
 	}
@@ -38,9 +38,10 @@ func TestMkdirAndRmdir(t *testing.T) {
 
 func TestMkdirBraceExpansion(t *testing.T) {
 	root := t.TempDir()
-	mk := handleMkdir(root)
+	ctx, sessions, mu := testSession(root)
+	mk := handleMkdir(sessions, mu)
 	pattern := "internal/agents/{dev,test,automation,security,uat}"
-	res, err := mk(context.Background(), mcp.CallToolRequest{}, MkdirArgs{Path: pattern})
+	res, err := mk(ctx, mcp.CallToolRequest{}, MkdirArgs{Path: pattern})
 	if err != nil {
 		t.Fatalf("mkdir brace expansion failed: %v", err)
 	}

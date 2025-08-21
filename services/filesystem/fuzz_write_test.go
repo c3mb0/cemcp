@@ -4,7 +4,6 @@
 package main
 
 import (
-	"context"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -15,8 +14,9 @@ func FuzzHandleWrite(f *testing.F) {
 	f.Add("f.txt", []byte("seed"))
 	f.Fuzz(func(t *testing.T, path string, data []byte) {
 		root := t.TempDir()
-		h := handleWrite(root)
-		_, _ = h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
+		ctx, sessions, mu := testSession(root)
+		h := handleWrite(sessions, mu)
+		_, _ = h(ctx, mcp.CallToolRequest{}, WriteArgs{
 			Path:    path,
 			Content: string(data),
 		})

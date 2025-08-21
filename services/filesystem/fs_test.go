@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -170,19 +169,20 @@ func TestDetectMIMEAndIsText(t *testing.T) {
 
 func TestHandleWriteStrategies(t *testing.T) {
 	root := t.TempDir()
+	ctx, sessions, mu := testSession(root)
 	// Overwrite create
-	wr := handleWrite(root)
-	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "A"})
+	wr := handleWrite(sessions, mu)
+	res, err := wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "A"})
 	if err != nil || !res.Created || res.Bytes != 1 {
 		t.Fatalf("overwrite create failed: %+v err=%v", res, err)
 	}
 	// No clobber
-	_, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "B", Strategy: strategyNoClobber})
+	_, err = wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "B", Strategy: strategyNoClobber})
 	if err == nil {
 		t.Fatalf("no_clobber should error if exists")
 	}
 	// Append
-	res, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "C", Strategy: strategyAppend})
+	res, err = wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "C", Strategy: strategyAppend})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestHandleWriteStrategies(t *testing.T) {
 		t.Fatalf("append wrong: %q", string(b))
 	}
 	// Prepend
-	res, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "Z", Strategy: strategyPrepend})
+	res, err = wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "Z", Strategy: strategyPrepend})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestHandleWriteStrategies(t *testing.T) {
 	}
 	// Replace range
 	s, e := 1, 2
-	res, err = wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "XY", Strategy: strategyReplaceRange, Start: &s, End: &e})
+	res, err = wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "a.txt", Content: "XY", Strategy: strategyReplaceRange, Start: &s, End: &e})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,8 +213,9 @@ func TestHandleWriteStrategies(t *testing.T) {
 
 func TestHandleWritePrependCreates(t *testing.T) {
 	root := t.TempDir()
-	wr := handleWrite(root)
-	res, err := wr(context.Background(), mcp.CallToolRequest{}, WriteArgs{Path: "new.txt", Content: "X", Strategy: strategyPrepend})
+	ctx, sessions, mu := testSession(root)
+	wr := handleWrite(sessions, mu)
+	res, err := wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "new.txt", Content: "X", Strategy: strategyPrepend})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,13 +234,14 @@ func TestHandleWritePrependCreates(t *testing.T) {
 func TestHandleReadAndPeek(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "b.txt"), []byte("hello world"), 0o644)
-	rd := handleRead(root)
-	res, err := rd(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "b.txt", MaxBytes: 5})
+	ctx, sessions, mu := testSession(root)
+	rd := handleRead(sessions, mu)
+	res, err := rd(ctx, mcp.CallToolRequest{}, ReadArgs{Path: "b.txt", MaxBytes: 5})
 	if err != nil || !res.Truncated || res.Content != "hello" {
 		t.Fatalf("read wrong: %+v err=%v", res, err)
 	}
-	pk := handlePeek(root)
-	pres, err := pk(context.Background(), mcp.CallToolRequest{}, PeekArgs{Path: "b.txt", Offset: 6, MaxBytes: 5})
+	pk := handlePeek(sessions, mu)
+	pres, err := pk(ctx, mcp.CallToolRequest{}, PeekArgs{Path: "b.txt", Offset: 6, MaxBytes: 5})
 	if err != nil || pres.Content != "world" || !pres.EOF {
 		t.Fatalf("peek wrong: %+v err=%v", pres, err)
 	}
@@ -249,9 +251,10 @@ func TestHandleEdit_TextAndRegex(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "e.txt")
 	mustWrite(t, p, []byte("one two two three"), 0o644)
-	ed := handleEdit(root)
+	ctx, sessions, mu := testSession(root)
+	ed := handleEdit(sessions, mu)
 	// text, limit 1
-	res, err := ed(context.Background(), mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: "two", Replace: "2", Count: 1})
+	res, err := ed(ctx, mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: "two", Replace: "2", Count: 1})
 	if err != nil || res.Replacements != 1 {
 		t.Fatalf("text edit failed: %+v err=%v", res, err)
 	}
@@ -260,7 +263,7 @@ func TestHandleEdit_TextAndRegex(t *testing.T) {
 		t.Fatalf("text replace wrong: %q", string(b))
 	}
 	// regex, replace all
-	res, err = ed(context.Background(), mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: "t[a-z]+", Replace: "X", Regex: true})
+	res, err = ed(ctx, mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: "t[a-z]+", Replace: "X", Regex: true})
 	if err != nil || res.Replacements != 2 {
 		t.Fatalf("regex edit failed: %+v err=%v", res, err)
 	}
@@ -274,13 +277,14 @@ func TestHandleListAndGlob(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "d", "x.txt"), []byte(""), 0o644)
 	mustWrite(t, filepath.Join(root, "d", "y.bin"), []byte{0}, 0o644)
-	ls := handleList(root)
-	res, err := ls(context.Background(), mcp.CallToolRequest{}, ListArgs{Path: ".", Recursive: true, MaxEntries: 10})
+	ctx, sessions, mu := testSession(root)
+	ls := handleList(sessions, mu)
+	res, err := ls(ctx, mcp.CallToolRequest{}, ListArgs{Path: ".", Recursive: true, MaxEntries: 10})
 	if err != nil || len(res.Entries) < 2 {
 		t.Fatalf("list failed: %d err=%v", len(res.Entries), err)
 	}
-	gb := handleGlob(root)
-	gres, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: "d/*.txt"})
+	gb := handleGlob(sessions, mu)
+	gres, err := gb(ctx, mcp.CallToolRequest{}, GlobArgs{Pattern: "d/*.txt"})
 	if err != nil || len(gres.Matches) != 1 || gres.Matches[0] != "d/x.txt" {
 		t.Fatalf("glob wrong: %+v err=%v", gres, err)
 	}
@@ -289,8 +293,9 @@ func TestHandleListAndGlob(t *testing.T) {
 func TestHandleGlobRecursive(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "a", "b", "c.txt"), []byte(""), 0o644)
-	gb := handleGlob(root)
-	res, err := gb(context.Background(), mcp.CallToolRequest{}, GlobArgs{Pattern: "**/*.txt"})
+	ctx, sessions, mu := testSession(root)
+	gb := handleGlob(sessions, mu)
+	res, err := gb(ctx, mcp.CallToolRequest{}, GlobArgs{Pattern: "**/*.txt"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,8 +308,9 @@ func TestHandleRead_DefaultLimit(t *testing.T) {
 	root := t.TempDir()
 	big := strings.Repeat("a", defaultReadMaxBytes+100)
 	mustWrite(t, filepath.Join(root, "big.txt"), []byte(big), 0o644)
-	rd := handleRead(root)
-	res, err := rd(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "big.txt"})
+	ctx, sessions, mu := testSession(root)
+	rd := handleRead(sessions, mu)
+	res, err := rd(ctx, mcp.CallToolRequest{}, ReadArgs{Path: "big.txt"})
 	if err != nil {
 		t.Fatal(err)
 	}

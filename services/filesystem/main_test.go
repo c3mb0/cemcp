@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,8 +38,9 @@ func TestReadSkipsHugeHash(t *testing.T) {
 	if err := os.WriteFile(p, make([]byte, maxHashBytes+1), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h := handleRead(root)
-	res, err := h(context.Background(), mcp.CallToolRequest{}, ReadArgs{Path: "huge.bin", MaxBytes: 1024})
+	ctx, sessions, mu := testSession(root)
+	h := handleRead(sessions, mu)
+	res, err := h(ctx, mcp.CallToolRequest{}, ReadArgs{Path: "huge.bin", MaxBytes: 1024})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,8 +54,9 @@ func TestReadSkipsHugeHash(t *testing.T) {
 
 func TestWriteCreatesDirsByDefault(t *testing.T) {
 	root := t.TempDir()
-	h := handleWrite(root)
-	if _, err := h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
+	ctx, sessions, mu := testSession(root)
+	h := handleWrite(sessions, mu)
+	if _, err := h(ctx, mcp.CallToolRequest{}, WriteArgs{
 		Path:    "nested/dir/file.txt",
 		Content: "hi",
 	}); err != nil {
@@ -72,8 +73,9 @@ func TestOverwritePreservesModeWhenEmpty(t *testing.T) {
 	if err := os.WriteFile(p, []byte("v1"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h := handleWrite(root)
-	if _, err := h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
+	ctx, sessions, mu := testSession(root)
+	h := handleWrite(sessions, mu)
+	if _, err := h(ctx, mcp.CallToolRequest{}, WriteArgs{
 		Path:    "f.txt",
 		Content: "v2",
 	}); err != nil {
@@ -94,8 +96,9 @@ func TestOverwriteChangesModeWhenProvided(t *testing.T) {
 	if err := os.WriteFile(p, []byte("v1"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h := handleWrite(root)
-	if _, err := h(context.Background(), mcp.CallToolRequest{}, WriteArgs{
+	ctx, sessions, mu := testSession(root)
+	h := handleWrite(sessions, mu)
+	if _, err := h(ctx, mcp.CallToolRequest{}, WriteArgs{
 		Path:    "f2.txt",
 		Content: "v2",
 		Mode:    "0644",
@@ -117,8 +120,9 @@ func TestEditRegexCountConsistency(t *testing.T) {
 	if err := os.WriteFile(p, []byte("a a a"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h := handleEdit(root)
-	res, err := h(context.Background(), mcp.CallToolRequest{}, EditArgs{
+	ctx, sessions, mu := testSession(root)
+	h := handleEdit(sessions, mu)
+	res, err := h(ctx, mcp.CallToolRequest{}, EditArgs{
 		Path:    "t.txt",
 		Pattern: "a",
 		Replace: "b",
@@ -139,8 +143,9 @@ func TestEditRegexBackrefAll(t *testing.T) {
 	if err := os.WriteFile(p, []byte("x=1; x=2;"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h := handleEdit(root)
-	res, err := h(context.Background(), mcp.CallToolRequest{}, EditArgs{
+	ctx, sessions, mu := testSession(root)
+	h := handleEdit(sessions, mu)
+	res, err := h(ctx, mcp.CallToolRequest{}, EditArgs{
 		Path:    "t.txt",
 		Pattern: `x=(\d)`,
 		Replace: `y=$1`,
@@ -169,8 +174,9 @@ func TestSearchLongLine(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "big.txt"), long, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h := handleSearch(root)
-	res, err := h(context.Background(), mcp.CallToolRequest{}, SearchArgs{Pattern: "hello"})
+	ctx, sessions, mu := testSession(root)
+	h := handleSearch(sessions, mu)
+	res, err := h(ctx, mcp.CallToolRequest{}, SearchArgs{Pattern: "hello"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,9 +203,10 @@ func TestCompatReadText(t *testing.T) {
 	if err := os.WriteFile(p, []byte("hi"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	handler := wrapTextHandler(handleRead(root), formatReadResult)
+	ctx, sessions, mu := testSession(root)
+	handler := wrapTextHandler(handleRead(sessions, mu), formatReadResult)
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]any{"path": "f.txt"}}}
-	res, err := handler(context.Background(), req)
+	res, err := handler(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}

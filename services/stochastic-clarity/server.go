@@ -207,7 +207,7 @@ func (s *SessionState) Reset() {
 // Server setup and handlers
 
 func setupServer() *server.MCPServer {
-	s := server.NewMCPServer("clear-thought", "0.0.5")
+	s := server.NewMCPServer("stochastic-clarity", "0.1.0")
 	session := NewSessionState("default", defaultConfig)
 
 	registerSequentialThinking(s, session)
@@ -225,7 +225,8 @@ func setupServer() *server.MCPServer {
 	registerTrimSession(s, session)
 	registerSessionContext(s, session)
 	registerSearchContext(s, session)
-	registerClearThoughtExamples(s)
+	registerStochasticClarityExamples(s)
+	registerStochasticTools(s)
 
 	return s
 }
@@ -873,10 +874,10 @@ func registerSearchContext(srv *server.MCPServer, state *SessionState) {
 	})
 }
 
-func registerClearThoughtExamples(srv *server.MCPServer) {
+func registerStochasticClarityExamples(srv *server.MCPServer) {
 	tool := mcp.NewTool(
-		"clearthoughtexamples",
-		mcp.WithDescription("Sample requests for sequentialthinking, mentalmodel, and debuggingapproach"),
+		"stochasticclarityexamples",
+		mcp.WithDescription("Sample requests for sequentialthinking, mentalmodel, debuggingapproach, and stochasticalgorithm"),
 	)
 
 	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -908,6 +909,17 @@ func registerClearThoughtExamples(srv *server.MCPServer) {
 					"steps":        []string{"split code", "test halves"},
 					"findings":     "bad init sequence",
 					"resolution":   "fix order",
+				},
+			},
+			{
+				"tool": "stochasticalgorithm",
+				"args": map[string]any{
+					"algorithm": "mdp",
+					"problem":   "navigate grid",
+					"mdp": map[string]any{
+						"gamma":  0.9,
+						"states": 4,
+					},
 				},
 			},
 		}

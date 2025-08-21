@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +24,8 @@ func FuzzEdit(f *testing.F) {
 		root := t.TempDir() // use t.* within the target body
 		p := filepath.Join(root, "e.txt")
 		_ = os.WriteFile(p, []byte(content), 0o644)
-		h := handleEdit(root)
-		_, _ = h(context.Background(), mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: pattern, Replace: repl, Regex: regex, Count: count})
+		ctx, sessions, mu := testSession(root)
+		h := handleEdit(sessions, mu)
+		_, _ = h(ctx, mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: pattern, Replace: repl, Regex: regex, Count: count})
 	})
 }
