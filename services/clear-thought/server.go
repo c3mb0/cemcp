@@ -71,7 +71,7 @@ func (s *SessionState) GetRemainingThoughts() int {
 	return s.config.MaxThoughtsPerSession - len(s.thoughts)
 }
 
-// RetractThought removes the most recent thought and reports whether a thought was retracted.
+// RetractThought removes and returns the most recent thought along with a success flag.
 func (s *SessionState) RetractThought() (*ThoughtData, bool) {
 	if len(s.thoughts) == 0 {
 		return nil, false
@@ -148,7 +148,7 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 			"sessionContext": map[string]any{
 				"sessionId":         state.SessionID(),
 				"totalThoughts":     len(all),
-				"remainingThoughts": state.GetRemainingThoughts(),
+				"remainingCapacity": state.GetRemainingThoughts(),
 				"recentThoughts":    recent,
 			},
 		}
@@ -172,7 +172,7 @@ func registerRetractThought(srv *server.MCPServer, state *SessionState) {
 			"sessionContext": map[string]any{
 				"sessionId":         state.SessionID(),
 				"totalThoughts":     len(all),
-				"remainingThoughts": state.GetRemainingThoughts(),
+				"remainingCapacity": state.GetRemainingThoughts(),
 				"recentThoughts":    recent,
 			},
 		}
