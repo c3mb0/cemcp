@@ -379,15 +379,19 @@ func registerRetractThought(srv *server.MCPServer, state *SessionState) {
 			return out, nil
 		}
 
-		res := map[string]any{
-			"retractedThought":  t,
-			"totalThoughts":     len(state.GetThoughts()),
-			"remainingThoughts": state.GetRemainingThoughts(),
-			"status":            "success",
-		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
-	})
+                res := map[string]any{
+                        "retractedThought":  t,
+                        "totalThoughts":     len(state.GetThoughts()),
+                        "remainingThoughts": state.GetRemainingThoughts(),
+                        "status":            "success",
+                        "sessionContext": map[string]any{
+                                "sessionId":        state.SessionID(),
+                                "outstandingGoals": state.GetOutstandingGoals(),
+                        },
+                }
+                b, _ := json.MarshalIndent(res, "", "  ")
+                return mcp.NewToolResultText(string(b)), nil
+        })
 }
 
 func registerGetBranch(srv *server.MCPServer, state *SessionState) {
@@ -423,14 +427,18 @@ func registerGetBranch(srv *server.MCPServer, state *SessionState) {
 			}
 			seq = append(seq, item)
 		}
-		res := map[string]any{
-			"branchId":    args.BranchID,
-			"thoughts":    seq,
-			"mergePoints": mergePoints,
-		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
-	})
+                res := map[string]any{
+                        "branchId":    args.BranchID,
+                        "thoughts":    seq,
+                        "mergePoints": mergePoints,
+                        "sessionContext": map[string]any{
+                                "sessionId":        state.SessionID(),
+                                "outstandingGoals": state.GetOutstandingGoals(),
+                        },
+                }
+                b, _ := json.MarshalIndent(res, "", "  ")
+                return mcp.NewToolResultText(string(b)), nil
+        })
 }
 
 func registerMentalModel(srv *server.MCPServer, state *SessionState) {
@@ -639,15 +647,19 @@ func registerGetThoughts(srv *server.MCPServer, state *SessionState) {
 		}
 		items := all[off : off+lim]
 
-		res := map[string]any{
-			"total":    len(all),
-			"offset":   off,
-			"limit":    lim,
-			"thoughts": items,
-		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
-	})
+                res := map[string]any{
+                        "total":    len(all),
+                        "offset":   off,
+                        "limit":    lim,
+                        "thoughts": items,
+                        "sessionContext": map[string]any{
+                                "sessionId":        state.SessionID(),
+                                "outstandingGoals": state.GetOutstandingGoals(),
+                        },
+                }
+                b, _ := json.MarshalIndent(res, "", "  ")
+                return mcp.NewToolResultText(string(b)), nil
+        })
 }
 
 func registerGetMentalModels(srv *server.MCPServer, state *SessionState) {
@@ -685,15 +697,19 @@ func registerGetMentalModels(srv *server.MCPServer, state *SessionState) {
 		}
 		items := all[off : off+lim]
 
-		res := map[string]any{
-			"total":        len(all),
-			"offset":       off,
-			"limit":        lim,
-			"mentalModels": items,
-		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
-	})
+                res := map[string]any{
+                        "total":        len(all),
+                        "offset":       off,
+                        "limit":        lim,
+                        "mentalModels": items,
+                        "sessionContext": map[string]any{
+                                "sessionId":        state.SessionID(),
+                                "outstandingGoals": state.GetOutstandingGoals(),
+                        },
+                }
+                b, _ := json.MarshalIndent(res, "", "  ")
+                return mcp.NewToolResultText(string(b)), nil
+        })
 }
 
 func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
@@ -731,15 +747,19 @@ func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
 		}
 		items := all[off : off+lim]
 
-		res := map[string]any{
-			"total":             len(all),
-			"offset":            off,
-			"limit":             lim,
-			"debuggingSessions": items,
-		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
-	})
+                res := map[string]any{
+                        "total":             len(all),
+                        "offset":            off,
+                        "limit":             lim,
+                        "debuggingSessions": items,
+                        "sessionContext": map[string]any{
+                                "sessionId":        state.SessionID(),
+                                "outstandingGoals": state.GetOutstandingGoals(),
+                        },
+                }
+                b, _ := json.MarshalIndent(res, "", "  ")
+                return mcp.NewToolResultText(string(b)), nil
+        })
 }
 
 func registerSessionContext(srv *server.MCPServer, state *SessionState) {
@@ -851,16 +871,20 @@ func registerSearchContext(srv *server.MCPServer, state *SessionState) {
 			nextOffset = &n
 		}
 
-		res := map[string]any{
-			"total":      len(results),
-			"offset":     off,
-			"limit":      limit,
-			"results":    items,
-			"nextOffset": nextOffset,
-		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
-	})
+                res := map[string]any{
+                        "total":      len(results),
+                        "offset":     off,
+                        "limit":      limit,
+                        "results":    items,
+                        "nextOffset": nextOffset,
+                        "sessionContext": map[string]any{
+                                "sessionId":        state.SessionID(),
+                                "outstandingGoals": state.GetOutstandingGoals(),
+                        },
+                }
+                b, _ := json.MarshalIndent(res, "", "  ")
+                return mcp.NewToolResultText(string(b)), nil
+        })
 }
 
 func registerTrimSession(srv *server.MCPServer, state *SessionState) {
@@ -882,14 +906,18 @@ func registerTrimSession(srv *server.MCPServer, state *SessionState) {
 			return out, nil
 		}
 
-		removed, remaining := state.TrimThoughts(args.KeepLast)
-		res := map[string]any{
-			"removed":   removed,
-			"remaining": remaining,
-		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
-	})
+                removed, remaining := state.TrimThoughts(args.KeepLast)
+                res := map[string]any{
+                        "removed":   removed,
+                        "remaining": remaining,
+                        "sessionContext": map[string]any{
+                                "sessionId":        state.SessionID(),
+                                "outstandingGoals": state.GetOutstandingGoals(),
+                        },
+                }
+                b, _ := json.MarshalIndent(res, "", "  ")
+                return mcp.NewToolResultText(string(b)), nil
+        })
 }
 
 // helpers
