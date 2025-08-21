@@ -33,8 +33,7 @@ func setupServer() *server.MCPServer {
 	)
 
 	s.AddTool(specTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		specs := algorithmSpecs()
-		return mcp.NewToolResultStructured(specs, ""), nil
+		return mcp.NewToolResultStructured(algorithmSpecs, ""), nil
 	})
 
 	tool := mcp.NewTool(
@@ -77,42 +76,40 @@ Supports various algorithms including:
 	return s
 }
 
-func algorithmSpecs() map[string]AlgorithmSpec {
-	return map[string]AlgorithmSpec{
-		"mdp": {
-			Required: []string{"states"},
-			Optional: map[string]any{
-				"gamma": 0.9,
-			},
-			Description: "Markov Decision Processes (MDPs): Optimize policies over long sequences of decisions",
+var algorithmSpecs = map[string]AlgorithmSpec{
+	"mdp": {
+		Required: []string{"states"},
+		Optional: map[string]any{
+			"gamma": 0.9,
 		},
-		"mcts": {
-			Optional: map[string]any{
-				"simulations":         1000,
-				"explorationConstant": 1.4,
-			},
-			Description: "Monte Carlo Tree Search (MCTS): Simulate future action sequences for large decision spaces",
+		Description: "Markov Decision Processes (MDPs): Optimize policies over long sequences of decisions",
+	},
+	"mcts": {
+		Optional: map[string]any{
+			"simulations":         1000,
+			"explorationConstant": 1.4,
 		},
-		"bandit": {
-			Optional: map[string]any{
-				"strategy": "epsilon-greedy",
-				"epsilon":  0.1,
-			},
-			Description: "Multi-Armed Bandit: Balance exploration vs exploitation in action selection",
+		Description: "Monte Carlo Tree Search (MCTS): Simulate future action sequences for large decision spaces",
+	},
+	"bandit": {
+		Optional: map[string]any{
+			"strategy": "epsilon-greedy",
+			"epsilon":  0.1,
 		},
-		"bayesian": {
-			Optional: map[string]any{
-				"acquisitionFunction": "expected improvement",
-			},
-			Description: "Bayesian Optimization: Optimize decisions with probabilistic inference",
+		Description: "Multi-Armed Bandit: Balance exploration vs exploitation in action selection",
+	},
+	"bayesian": {
+		Optional: map[string]any{
+			"acquisitionFunction": "expected improvement",
 		},
-		"hmm": {
-			Optional: map[string]any{
-				"algorithm": "forward-backward",
-			},
-			Description: "Hidden Markov Models (HMMs): Infer latent states affecting decision outcomes",
+		Description: "Bayesian Optimization: Optimize decisions with probabilistic inference",
+	},
+	"hmm": {
+		Optional: map[string]any{
+			"algorithm": "forward-backward",
 		},
-	}
+		Description: "Hidden Markov Models (HMMs): Infer latent states affecting decision outcomes",
+	},
 }
 
 func summaryForAlgorithm(a StochasticArgs) string {
