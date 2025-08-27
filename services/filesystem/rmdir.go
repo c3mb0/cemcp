@@ -31,6 +31,12 @@ func handleRmdir(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.Struct
 		}
 		fi, err := os.Lstat(full)
 		if err != nil {
+			if os.IsNotExist(err) {
+				dprintf("fs_rmdir path does not exist, idempotent success")
+				out = RmdirResult{Path: args.Path, Removed: false}
+				dprintf("<- fs_rmdir ok removed=false (already absent) dur=%s", time.Since(start))
+				return out, nil
+			}
 			dprintf("fs_rmdir lstat error: %v", err)
 			return out, err
 		}
