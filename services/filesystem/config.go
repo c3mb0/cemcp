@@ -119,11 +119,11 @@ func (c *ServerConfig) Validate() error {
 func getRoot() (string, error) {
 	var base string
 
-	// Priority: flag > environment variable > current directory
-	if *rootDirFlag != "" {
-		base = mustAbs(*rootDirFlag)
-	} else if env := os.Getenv("FS_ROOT"); env != "" {
+	// Priority: environment variable > flag > current directory
+	if env := os.Getenv("FS_ROOT"); env != "" {
 		base = mustAbs(env)
+	} else if *rootDirFlag != "" {
+		base = mustAbs(*rootDirFlag)
 	} else {
 		cwd, err := os.Getwd()
 		if err != nil {
