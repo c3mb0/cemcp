@@ -34,6 +34,12 @@ func safeJoin(root, reqPath string) (string, error) {
 		} else {
 			reqPath = u.Path
 		}
+		// Resolve the path from the URI to handle macOS /private prefix
+		if filepath.IsAbs(reqPath) {
+			if resolved, err := filepath.EvalSymlinks(reqPath); err == nil {
+				reqPath = resolved
+			}
+		}
 	}
 	clean := filepath.Clean(reqPath)
 	rootAbs := mustAbs(root)
@@ -52,7 +58,13 @@ func safeJoin(root, reqPath string) (string, error) {
 	parent := filepath.Join(rootAbs, dir)
 	parentResolved, err := filepath.EvalSymlinks(parent)
 	if err != nil {
-		parentResolved = mustAbs(parent)
+		// If parent doesn't exist, construct the path within the root
+		if os.IsNotExist(err) {
+			// Use rootResolved to ensure consistent path comparison
+			parentResolved = filepath.Join(rootResolved, dir)
+		} else {
+			parentResolved = mustAbs(parent)
+		}
 	}
 	final := filepath.Join(parentResolved, base)
 	finalAbs := mustAbs(final)

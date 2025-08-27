@@ -38,7 +38,8 @@ func TestSafeJoin(t *testing.T) {
 
 	// Normal join
 	p, err := safeJoin(root, "dir/file.txt")
-	if err != nil || p != inside {
+	insideResolved, _ := filepath.EvalSymlinks(inside)
+	if err != nil || (p != inside && p != insideResolved) {
 		t.Fatalf("safeJoin failed: %v %q", err, p)
 	}
 
@@ -72,7 +73,8 @@ func TestSafeJoinResolveFinal(t *testing.T) {
 		t.Fatalf("symlink: %v", err)
 	}
 	p, err := safeJoinResolveFinal(root, "link.txt")
-	if err != nil || p != inside {
+	insideResolved, _ := filepath.EvalSymlinks(inside)
+	if err != nil || (p != inside && p != insideResolved) {
 		t.Fatalf("resolve final inside failed: %v %q", err, p)
 	}
 

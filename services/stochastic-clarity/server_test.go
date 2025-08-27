@@ -42,8 +42,11 @@ func startTestServer(t *testing.T, cfg ServerConfig) (*client.Client, *SessionSt
 	}
 
 	cleanup := func() {
-		tr.Close()
+		// First cancel the context to stop the server
 		cancel()
+		// Then close transport
+		tr.Close()
+		// Finally close pipes
 		sr.Close()
 		sw.Close()
 		cr.Close()

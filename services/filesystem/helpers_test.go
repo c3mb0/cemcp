@@ -61,7 +61,8 @@ func TestGetRoot(t *testing.T) {
 		*rootDirFlag = dir
 		os.Setenv("FS_ROOT", "")
 		r, err := getRoot()
-		if err != nil || r != dir {
+		dirResolved, _ := filepath.EvalSymlinks(dir)
+		if err != nil || (r != dir && r != dirResolved) {
 			t.Fatalf("getRoot flag failed: %q %v", r, err)
 		}
 	})
@@ -71,7 +72,8 @@ func TestGetRoot(t *testing.T) {
 		*rootDirFlag = ""
 		os.Setenv("FS_ROOT", dir)
 		r, err := getRoot()
-		if err != nil || r != dir {
+		dirResolved, _ := filepath.EvalSymlinks(dir)
+		if err != nil || (r != dir && r != dirResolved) {
 			t.Fatalf("getRoot env failed: %q %v", r, err)
 		}
 	})
@@ -84,7 +86,8 @@ func TestGetRoot(t *testing.T) {
 		*rootDirFlag = ""
 		os.Setenv("FS_ROOT", "")
 		r, err := getRoot()
-		if err != nil || r != dir {
+		dirResolved, _ := filepath.EvalSymlinks(dir)
+		if err != nil || (r != dir && r != dirResolved) {
 			t.Fatalf("getRoot cwd failed: %q %v", r, err)
 		}
 	})

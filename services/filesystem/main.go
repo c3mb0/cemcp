@@ -11,11 +11,6 @@ import (
 
 func main() {
 	flag.Parse()
-	cleanup, err := ensureSingleInstance()
-	if err != nil {
-		panic(err)
-	}
-	defer cleanup()
 	initDebug()
 	root, err := getRoot()
 	if err != nil {

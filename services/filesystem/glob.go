@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"runtime"
@@ -31,9 +32,9 @@ func handleGlob(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.Structu
 		if args.Pattern == "" {
 			return out, errors.New("pattern required")
 		}
-		if _, err := safeJoin(root, args.Pattern); err != nil {
-			dprintf("fs_glob error: %v", err)
-			return out, err
+		// Check for patterns that try to escape the root
+		if strings.Contains(args.Pattern, "../") || strings.HasPrefix(args.Pattern, "/") {
+			return out, fmt.Errorf("pattern cannot escape base folder: %s", args.Pattern)
 		}
 		max := args.MaxResults
 		if max <= 0 {
