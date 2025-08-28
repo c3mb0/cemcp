@@ -21,8 +21,9 @@ func mustAbs(p string) string {
 // It validates the parent path but does not resolve the final element.
 // For read operations where following symlinks could escape the base folder, use safeJoinResolveFinal.
 func safeJoin(root, reqPath string) (string, error) {
-	if reqPath == "" {
-		return "", errors.New("path is required")
+	// Allow "." or empty to refer to the root directory itself
+	if reqPath == "." || reqPath == "" {
+		return mustAbs(root), nil
 	}
 	if strings.HasPrefix(reqPath, "file://") {
 		u, err := url.Parse(reqPath)

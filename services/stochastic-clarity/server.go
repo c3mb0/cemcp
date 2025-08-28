@@ -49,6 +49,93 @@ type Goal struct {
 	Notes       string `json:"notes,omitempty"`
 }
 
+// Response types for structured output
+
+type ErrorResponse struct {
+	Error  string `json:"error"`
+	Status string `json:"status"`
+}
+
+type SessionContext struct {
+	SessionID         string          `json:"sessionId"`
+	TotalThoughts     int             `json:"totalThoughts"`
+	RemainingThoughts int             `json:"remainingThoughts"`
+	RecentThoughts    []map[string]any `json:"recentThoughts"`
+	TotalGoals        int             `json:"totalGoals"`
+	OutstandingGoals  int             `json:"outstandingGoals"`
+	Summary           string          `json:"summary,omitempty"`
+	StochasticSummary interface{}     `json:"stochasticSummary,omitempty"`
+}
+
+type ThoughtResponse struct {
+	Thought               string          `json:"thought"`
+	ThoughtNumber         int             `json:"thoughtNumber"`
+	ExpectedThoughtNumber int             `json:"expectedThoughtNumber"`
+	TotalThoughts         int             `json:"totalThoughts"`
+	NextThoughtNeeded     bool            `json:"nextThoughtNeeded"`
+	IsRevision            *bool           `json:"isRevision,omitempty"`
+	RevisesThought        *int            `json:"revisesThought,omitempty"`
+	BranchFromThought     *int            `json:"branchFromThought,omitempty"`
+	BranchID              *string         `json:"branchId,omitempty"`
+	NeedsMoreThoughts     *bool           `json:"needsMoreThoughts,omitempty"`
+	Status                string          `json:"status"`
+	SessionContext        SessionContext  `json:"sessionContext"`
+	Hint                  string          `json:"hint"`
+}
+
+type GetThoughtsResponse struct {
+	Total    int           `json:"total"`
+	Offset   int           `json:"offset"`
+	Limit    int           `json:"limit"`
+	Thoughts []ThoughtData `json:"thoughts"`
+}
+
+type UpdateThoughtResponse struct {
+	Success        bool   `json:"success"`
+	Message        string `json:"message"`
+	UpdatedThought ThoughtData `json:"updatedThought,omitempty"`
+	TotalThoughts  int    `json:"totalThoughts"`
+}
+
+type GoalResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Goals   []Goal `json:"goals,omitempty"`
+}
+
+type MentalModelResponse struct {
+	ModelName      string         `json:"modelName"`
+	Problem        string         `json:"problem"`
+	Steps          []string       `json:"steps"`
+	Reasoning      string         `json:"reasoning"`
+	Conclusion     string         `json:"conclusion"`
+	Status         string         `json:"status"`
+	SessionContext SessionContext `json:"sessionContext"`
+}
+
+type DebuggingApproachResponse struct {
+	ApproachName   string         `json:"approachName"`
+	Issue          string         `json:"issue"`
+	Steps          []string       `json:"steps"`
+	Findings       string         `json:"findings"`
+	Resolution     string         `json:"resolution"`
+	Status         string         `json:"status"`
+	SessionContext SessionContext `json:"sessionContext"`
+}
+
+type SessionContextResponse struct {
+	SessionID                string                  `json:"sessionId"`
+	TotalThoughts            int                     `json:"totalThoughts"`
+	RemainingThoughts        int                     `json:"remainingThoughts"`
+	RecentThoughts           []map[string]any        `json:"recentThoughts"`
+	TotalMentalModels        int                     `json:"totalMentalModels"`
+	RecentMentalModels       []MentalModelData       `json:"recentMentalModels"`
+	TotalDebuggingSessions   int                     `json:"totalDebuggingSessions"`
+	RecentDebuggingSessions  []DebuggingApproachData `json:"recentDebuggingSessions"`
+	TotalGoals               int                     `json:"totalGoals"`
+	OutstandingGoals         []Goal                  `json:"outstandingGoals"`
+}
+
 // Session state
 
 type ServerConfig struct {
@@ -249,42 +336,40 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var args ThoughtData
 		if err := req.BindArguments(&args); err != nil {
-			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
-			out := mcp.NewToolResultText(string(b))
+			errResp := ErrorResponse{Error: err.Error(), Status: "failed"}
+			out := &mcp.CallToolResult{StructuredContent: errResp}
 			out.IsError = true
 			return out, nil
 		}
 		expectedThoughtNumber := len(state.GetThoughts()) + 1
 		if args.ThoughtNumber != expectedThoughtNumber {
-			warnResp := map[string]any{
-				"error":                 fmt.Sprintf("thoughtNumber must be %d but got %d", expectedThoughtNumber, args.ThoughtNumber),
-				"expectedThoughtNumber": expectedThoughtNumber,
-				"status":                "out_of_order",
+			warnResp := struct {
+				Error                 string `json:"error"`
+				ExpectedThoughtNumber int    `json:"expectedThoughtNumber"`
+				Status                string `json:"status"`
+			}{
+				Error:                 fmt.Sprintf("thoughtNumber must be %d but got %d", expectedThoughtNumber, args.ThoughtNumber),
+				ExpectedThoughtNumber: expectedThoughtNumber,
+				Status:                "out_of_order",
 			}
-			b, _ := json.MarshalIndent(warnResp, "", "  ")
-			out := mcp.NewToolResultText(string(b))
-			return out, nil
+			return &mcp.CallToolResult{StructuredContent: warnResp}, nil
 		}
 		if args.IsRevision != nil && args.RevisesThought == nil {
-			errResp := map[string]any{"error": "revisesThought is required when isRevision is set", "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
-			out := mcp.NewToolResultText(string(b))
+			errResp := ErrorResponse{Error: "revisesThought is required when isRevision is set", Status: "failed"}
+			out := &mcp.CallToolResult{StructuredContent: errResp}
 			out.IsError = true
 			return out, nil
 		}
 		if args.BranchFromThought != nil && args.BranchID == nil {
-			errResp := map[string]any{"error": "branchId is required when branchFromThought is provided", "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
-			out := mcp.NewToolResultText(string(b))
+			errResp := ErrorResponse{Error: "branchId is required when branchFromThought is provided", Status: "failed"}
+			out := &mcp.CallToolResult{StructuredContent: errResp}
 			out.IsError = true
 			return out, nil
 		}
 		if args.BranchID != nil {
 			if err := state.RegisterBranch(*args.BranchID, args.BranchFromThought); err != nil {
-				errResp := map[string]any{"error": err.Error(), "status": "failed"}
-				b, _ := json.MarshalIndent(errResp, "", "  ")
-				out := mcp.NewToolResultText(string(b))
+				errResp := ErrorResponse{Error: err.Error(), Status: "failed"}
+				out := &mcp.CallToolResult{StructuredContent: errResp}
 				out.IsError = true
 				return out, nil
 			}
@@ -293,37 +378,36 @@ func registerSequentialThinking(srv *server.MCPServer, state *SessionState) {
 		added, summary := state.AddThought(args)
 		all := state.GetThoughts()
 		recent := lastThoughts(all, 3)
-		sessionCtx := map[string]any{
-			"sessionId":         state.SessionID(),
-			"totalThoughts":     len(all),
-			"remainingThoughts": state.GetRemainingThoughts(),
-			"recentThoughts":    recent,
-			"totalGoals":        len(state.GetGoals()),
-			"outstandingGoals":  state.GetOutstandingGoals(),
-		}
-		if summary != "" {
-			sessionCtx["summary"] = summary
+		
+		sessionCtx := SessionContext{
+			SessionID:         state.SessionID(),
+			TotalThoughts:     len(all),
+			RemainingThoughts: state.GetRemainingThoughts(),
+			RecentThoughts:    recent,
+			TotalGoals:        len(state.GetGoals()),
+			OutstandingGoals:  len(state.GetOutstandingGoals()),
+			Summary:           summary,
 		}
 		if ss, err := stochastic.ReadSummary(state.SessionID()); err == nil {
-			sessionCtx["stochasticSummary"] = ss
+			sessionCtx.StochasticSummary = ss
 		}
-		res := map[string]any{
-			"thought":               args.Thought,
-			"thoughtNumber":         args.ThoughtNumber,
-			"expectedThoughtNumber": expectedThoughtNumber,
-			"totalThoughts":         args.TotalThoughts,
-			"nextThoughtNeeded":     args.NextThoughtNeeded,
-			"isRevision":            args.IsRevision,
-			"revisesThought":        args.RevisesThought,
-			"branchFromThought":     args.BranchFromThought,
-			"branchId":              args.BranchID,
-			"needsMoreThoughts":     args.NeedsMoreThoughts,
-			"status":                map[bool]string{true: "success", false: "limit_reached"}[added],
-			"sessionContext":        sessionCtx,
-			"hint":                  fmt.Sprintf("Submit thought #%d if continuing.", expectedThoughtNumber),
+		
+		res := ThoughtResponse{
+			Thought:               args.Thought,
+			ThoughtNumber:         args.ThoughtNumber,
+			ExpectedThoughtNumber: expectedThoughtNumber,
+			TotalThoughts:         args.TotalThoughts,
+			NextThoughtNeeded:     args.NextThoughtNeeded,
+			IsRevision:            args.IsRevision,
+			RevisesThought:        args.RevisesThought,
+			BranchFromThought:     args.BranchFromThought,
+			BranchID:              args.BranchID,
+			NeedsMoreThoughts:     args.NeedsMoreThoughts,
+			Status:                map[bool]string{true: "success", false: "limit_reached"}[added],
+			SessionContext:        sessionCtx,
+			Hint:                  fmt.Sprintf("Submit thought #%d if continuing.", expectedThoughtNumber),
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
+		return &mcp.CallToolResult{StructuredContent: res}, nil
 	})
 }
 
@@ -458,9 +542,8 @@ func registerMentalModel(srv *server.MCPServer, state *SessionState) {
 	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var args MentalModelData
 		if err := req.BindArguments(&args); err != nil {
-			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
-			out := mcp.NewToolResultText(string(b))
+			errResp := ErrorResponse{Error: err.Error(), Status: "failed"}
+			out := &mcp.CallToolResult{StructuredContent: errResp}
 			out.IsError = true
 			return out, nil
 		}
@@ -468,21 +551,35 @@ func registerMentalModel(srv *server.MCPServer, state *SessionState) {
 		state.AddMentalModel(args)
 		all := state.GetMentalModels()
 		recent := lastModels(all, 3)
-		res := map[string]any{
-			"modelName":     args.ModelName,
-			"status":        "success",
-			"hasSteps":      len(args.Steps) > 0,
-			"hasConclusion": args.Conclusion != "",
-			"sessionContext": map[string]any{
-				"sessionId":         state.SessionID(),
-				"totalMentalModels": len(all),
-				"recentModels":      recent,
-				"totalGoals":        len(state.GetGoals()),
-				"outstandingGoals":  state.GetOutstandingGoals(),
-			},
+		
+		sessionCtx := SessionContext{
+			SessionID:         state.SessionID(),
+			TotalThoughts:     len(state.GetThoughts()),
+			RemainingThoughts: state.GetRemainingThoughts(),
+			RecentThoughts:    lastThoughts(state.GetThoughts(), 3),
+			TotalGoals:        len(state.GetGoals()),
+			OutstandingGoals:  len(state.GetOutstandingGoals()),
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
+		
+		// Add model-specific context
+		res := struct {
+			ModelName        string         `json:"modelName"`
+			Status           string         `json:"status"`
+			HasSteps         bool           `json:"hasSteps"`
+			HasConclusion    bool           `json:"hasConclusion"`
+			SessionContext   SessionContext `json:"sessionContext"`
+			TotalModels      int            `json:"totalMentalModels"`
+			RecentModels     []map[string]any `json:"recentModels"`
+		}{
+			ModelName:      args.ModelName,
+			Status:         "success",
+			HasSteps:       len(args.Steps) > 0,
+			HasConclusion:  args.Conclusion != "",
+			SessionContext: sessionCtx,
+			TotalModels:    len(all),
+			RecentModels:   recent,
+		}
+		return &mcp.CallToolResult{StructuredContent: res}, nil
 	})
 }
 
@@ -502,34 +599,50 @@ func registerDebuggingApproach(srv *server.MCPServer, state *SessionState) {
 	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var args DebuggingApproachData
 		if err := req.BindArguments(&args); err != nil {
-			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
-			out := mcp.NewToolResultText(string(b))
+			errResp := ErrorResponse{Error: err.Error(), Status: "failed"}
+			out := &mcp.CallToolResult{StructuredContent: errResp}
 			out.IsError = true
 			return out, nil
 		}
 
 		state.AddDebuggingSession(args)
 		recent := lastDebugging(state.GetDebuggingSessions(), 3)
-		res := map[string]any{
-			"approachName":  args.ApproachName,
-			"issue":         args.Issue,
-			"steps":         args.Steps,
-			"findings":      args.Findings,
-			"resolution":    args.Resolution,
-			"status":        "success",
-			"hasSteps":      len(args.Steps) > 0,
-			"hasResolution": args.Resolution != "",
-			"sessionContext": map[string]any{
-				"sessionId":                state.SessionID(),
-				"totalDebuggingApproaches": len(state.GetDebuggingSessions()),
-				"recentApproaches":         recent,
-				"totalGoals":               len(state.GetGoals()),
-				"outstandingGoals":         state.GetOutstandingGoals(),
-			},
+		
+		sessionCtx := SessionContext{
+			SessionID:         state.SessionID(),
+			TotalThoughts:     len(state.GetThoughts()),
+			RemainingThoughts: state.GetRemainingThoughts(),
+			RecentThoughts:    lastThoughts(state.GetThoughts(), 3),
+			TotalGoals:        len(state.GetGoals()),
+			OutstandingGoals:  len(state.GetOutstandingGoals()),
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
+		
+		res := struct {
+			ApproachName      string         `json:"approachName"`
+			Issue             string         `json:"issue"`
+			Steps             []string       `json:"steps"`
+			Findings          string         `json:"findings"`
+			Resolution        string         `json:"resolution"`
+			Status            string         `json:"status"`
+			HasSteps          bool           `json:"hasSteps"`
+			HasResolution     bool           `json:"hasResolution"`
+			SessionContext    SessionContext `json:"sessionContext"`
+			TotalDebugging    int            `json:"totalDebuggingApproaches"`
+			RecentApproaches  []map[string]any `json:"recentApproaches"`
+		}{
+			ApproachName:      args.ApproachName,
+			Issue:             args.Issue,
+			Steps:             args.Steps,
+			Findings:          args.Findings,
+			Resolution:        args.Resolution,
+			Status:            "success",
+			HasSteps:          len(args.Steps) > 0,
+			HasResolution:     args.Resolution != "",
+			SessionContext:    sessionCtx,
+			TotalDebugging:    len(state.GetDebuggingSessions()),
+			RecentApproaches:  recent,
+		}
+		return &mcp.CallToolResult{StructuredContent: res}, nil
 	})
 }
 
@@ -630,9 +743,8 @@ func registerGetThoughts(srv *server.MCPServer, state *SessionState) {
 			Limit  *int `json:"limit"`
 		}
 		if err := req.BindArguments(&args); err != nil {
-			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
-			out := mcp.NewToolResultText(string(b))
+			errResp := ErrorResponse{Error: err.Error(), Status: "failed"}
+			out := &mcp.CallToolResult{StructuredContent: errResp}
 			out.IsError = true
 			return out, nil
 		}
@@ -651,14 +763,13 @@ func registerGetThoughts(srv *server.MCPServer, state *SessionState) {
 		}
 		items := all[off : off+lim]
 
-		res := map[string]any{
-			"total":    len(all),
-			"offset":   off,
-			"limit":    lim,
-			"thoughts": items,
+		res := GetThoughtsResponse{
+			Total:    len(all),
+			Offset:   off,
+			Limit:    lim,
+			Thoughts: items,
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
-		return mcp.NewToolResultText(string(b)), nil
+		return &mcp.CallToolResult{StructuredContent: res}, nil
 	})
 }
 

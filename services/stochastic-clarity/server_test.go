@@ -75,11 +75,20 @@ func TestSequentialThinkingEnforcesLimit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("call %d failed: %v", i, err)
 		}
-		text := res.Content[0].(mcp.TextContent).Text
+		// Check structured content
+		if res.StructuredContent == nil {
+			t.Fatalf("call %d: expected structured content", i)
+		}
+		
+		// Convert to map to check status
+		data, err := json.Marshal(res.StructuredContent)
+		if err != nil {
+			t.Fatalf("marshal structured content: %v", err)
+		}
 		var body struct {
 			Status string `json:"status"`
 		}
-		if err := json.Unmarshal([]byte(text), &body); err != nil {
+		if err := json.Unmarshal(data, &body); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
 		wantStatus := "success"
@@ -118,11 +127,15 @@ func TestMentalModelUpdatesState(t *testing.T) {
 	if len(state.GetMentalModels()) != 1 {
 		t.Fatalf("expected 1 model in state")
 	}
-	text := res.Content[0].(mcp.TextContent).Text
+	// Check structured content
+	if res.StructuredContent == nil {
+		t.Fatal("expected structured content")
+	}
+	data, _ := json.Marshal(res.StructuredContent)
 	var body struct {
 		Status string `json:"status"`
 	}
-	if err := json.Unmarshal([]byte(text), &body); err != nil {
+	if err := json.Unmarshal(data, &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if body.Status != "success" {
@@ -153,11 +166,15 @@ func TestDebuggingApproachUpdatesState(t *testing.T) {
 	if len(state.GetDebuggingSessions()) != 1 {
 		t.Fatalf("expected 1 debugging session")
 	}
-	text := res.Content[0].(mcp.TextContent).Text
+	// Check structured content
+	if res.StructuredContent == nil {
+		t.Fatal("expected structured content")
+	}
+	data, _ := json.Marshal(res.StructuredContent)
 	var body struct {
 		Status string `json:"status"`
 	}
-	if err := json.Unmarshal([]byte(text), &body); err != nil {
+	if err := json.Unmarshal(data, &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if body.Status != "success" {

@@ -4,7 +4,7 @@ go 1.24.5
 
 require (
 	github.com/c3mb0/cemcp/pkg v0.0.0
-	github.com/mark3labs/mcp-go v0.37.0
+	github.com/mark3labs/mcp-go v0.38.0
 )
 
 require (

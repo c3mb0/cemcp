@@ -5,7 +5,7 @@ go 1.24.5
 require (
 	github.com/bmatcuk/doublestar/v4 v4.0.2
 	github.com/google/uuid v1.6.0
-	github.com/mark3labs/mcp-go v0.37.0
+	github.com/mark3labs/mcp-go v0.38.0
 )
 
 require (
