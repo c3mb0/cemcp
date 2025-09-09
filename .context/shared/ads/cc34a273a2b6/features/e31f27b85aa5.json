@@ -1,0 +1,16 @@
+{
+  "cap_rule": "none",
+  "cell_id": "e31f27b85aa5",
+  "class": "feature",
+  "fence_mode": "manual", 
+  "feature": "error_standardization",
+  "footprint_sha": "c4d6f82b1e37",
+  "goal": "be591eb9c4d5",
+  "hotspot_avoid_sha": "",
+  "mincut_sha": "",
+  "plan_sha": "5f3c8b4e9a17",
+  "qed_sha": "",
+  "requires_axioms": ["error_consistency", "api_stability"],
+  "rid": "cc34a273a2b6",
+  "signature_stub": true
+}

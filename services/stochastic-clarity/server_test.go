@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
@@ -30,7 +31,7 @@ func startTestServer(t *testing.T, cfg ServerConfig) (*client.Client, *SessionSt
 
 	stdio := server.NewStdioServer(srv)
 	ctx, cancel := context.WithCancel(context.Background())
-	go stdio.Listen(ctx, sr, sw)
+	go func() { _ = stdio.Listen(ctx, sr, sw) }()
 
 	tr := transport.NewIO(cr, cw, io.NopCloser(&bytes.Buffer{}))
 	if err := tr.Start(ctx); err != nil {
@@ -42,15 +43,25 @@ func startTestServer(t *testing.T, cfg ServerConfig) (*client.Client, *SessionSt
 	}
 
 	cleanup := func() {
-		// First cancel the context to stop the server
+		// Cancel the context first to stop all operations
 		cancel()
-		// Then close transport
+		
+		// Wait longer for all goroutines to finish before closing resources
+		time.Sleep(50 * time.Millisecond)
+		
+		// Close transport first, ignoring any errors
 		tr.Close()
-		// Finally close pipes
-		sr.Close()
-		sw.Close()
-		cr.Close()
+		
+		// Close write ends first to signal EOF properly
 		cw.Close()
+		sw.Close()
+		
+		// Short delay before closing read ends
+		time.Sleep(10 * time.Millisecond)
+		
+		// Close read ends
+		cr.Close()
+		sr.Close()
 	}
 	return cli, state, cleanup
 }

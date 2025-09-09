@@ -4,8 +4,13 @@ go 1.24.5
 
 require (
 	github.com/bmatcuk/doublestar/v4 v4.0.2
+	github.com/disintegration/imaging v1.6.2
+	github.com/dsoprea/go-exif/v3 v3.0.1
 	github.com/google/uuid v1.6.0
+	github.com/ledongthuc/pdf v0.0.0-20220302134840-0c2507a12d80
 	github.com/mark3labs/mcp-go v0.38.0
+	github.com/otiai10/gosseract/v2 v2.4.1
+	golang.org/x/image v0.15.0
 )
 
 require (

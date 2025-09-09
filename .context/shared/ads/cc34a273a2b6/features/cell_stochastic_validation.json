@@ -1,0 +1,9 @@
+{
+  "class": "feature",
+  "id": "cell_stochastic_validation",
+  "impl_plan_sha": "a0ecb3e9208e",
+  "owner": "cc34a273a2b6",
+  "qed_sha": "d203c76485e6",
+  "requires_axioms": ["input_validation_completeness", "error_message_consistency", "nil_safety_guarantee"],
+  "status": "implemented"
+}

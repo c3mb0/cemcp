@@ -64,7 +64,9 @@ func handleSearch(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.Struc
 
 		var out SearchResult
 		if args.Pattern == "" {
-			return out, newOpError("search", args.Path, ErrPatternRequired)
+			errResp := NewValidationError("pattern", "search pattern is required", []string{`"pattern": "*.js"`, `"pattern": "function.*\\("`})
+			errResp.Operation = "search"
+			return out, errResp
 		}
 
 		max := args.MaxResults
@@ -77,7 +79,7 @@ func handleSearch(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.Struc
 		if args.Regex {
 			r, err := regexp.Compile(args.Pattern)
 			if err != nil {
-				return out, newOpError("search", args.Path, ErrInvalidRegex, err.Error())
+				return out, WrapError(ErrInvalidRegex, "search", args.Path)
 			}
 			rx = r
 		}
@@ -243,7 +245,11 @@ func searchFile(path, pattern string, rx *regexp.Regexp, root string, maxMatches
 	if err != nil {
 		return nil, 0
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			dprintf("warning: failed to close file %s: %v", path, closeErr)
+		}
+	}()
 
 	var matches []SearchMatch
 	var bytesRead int64

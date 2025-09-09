@@ -1,0 +1,4 @@
+{"command":"go build ./services/filesystem","type":"build","status":"success"}
+{"command":"go test ./services/filesystem","type":"test","status":"success"}
+{"command":"go build ./services/stochastic-clarity","type":"build","status":"success"}
+{"command":"go test ./services/stochastic-clarity","type":"test","status":"success"}

@@ -1,0 +1,11 @@
+{"file":"/Users/cem/cemcp/services/filesystem/errors.go","symbol":"ErrorCategory","type":"type","line":7}
+{"file":"/Users/cem/cemcp/services/filesystem/errors.go","symbol":"ErrorSeverity","type":"type","line":15}
+{"file":"/Users/cem/cemcp/services/filesystem/errors.go","symbol":"OperationError","type":"type","line":25}
+{"file":"/Users/cem/cemcp/services/filesystem/errors.go","symbol":"ValidationError","type":"type","line":51}
+{"file":"/Users/cem/cemcp/services/filesystem/errors.go","symbol":"ErrorResponse","type":"type","line":68}
+{"file":"/Users/cem/cemcp/services/filesystem/errors.go","symbol":"RecoveryHint","type":"type","line":82}
+{"file":"/Users/cem/cemcp/services/filesystem/peek.go","symbol":"readWindow","type":"func","line":11}
+{"file":"/Users/cem/cemcp/services/filesystem/peek.go","symbol":"formatPeekResult","type":"func","line":38}
+{"file":"/Users/cem/cemcp/services/filesystem/peek.go","symbol":"handlePeek","type":"func","line":46}
+{"file":"/Users/cem/cemcp/services/filesystem/algorithm_summary.go","symbol":"summaryForAlgorithm","type":"func","line":8}
+{"file":"/Users/cem/cemcp/services/filesystem/brace_expand.go","symbol":"main","type":"package","line":1}

@@ -1,0 +1,3 @@
+{"error":"validation_failed","count":0,"context":"parameter validation"}
+{"error":"type_mismatch","count":0,"context":"type safety"}
+{"error":"bounds_exceeded","count":0,"context":"input sanitization"}

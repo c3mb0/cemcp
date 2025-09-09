@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -14,14 +15,14 @@ func wrapTextHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFunc[TAr
 		var args TArgs
 		if err := req.BindArguments(&args); err != nil {
 			errResp := toErrorResponse(err)
-			out := mcp.NewToolResultStructured(errResp, errResp.Error)
+			out := mcp.NewToolResultStructured(errResp, errResp.Message)
 			out.IsError = true
 			return out, nil
 		}
 		res, err := h(ctx, req, args)
 		if err != nil {
 			errResp := toErrorResponse(err)
-			out := mcp.NewToolResultStructured(errResp, errResp.Error)
+			out := mcp.NewToolResultStructured(errResp, errResp.Message)
 			out.IsError = true
 			return out, nil
 		}
@@ -34,14 +35,14 @@ func wrapStructuredHandler[TArgs any, TResult any](h mcp.StructuredToolHandlerFu
 		var args TArgs
 		if err := req.BindArguments(&args); err != nil {
 			errResp := toErrorResponse(err)
-			out := mcp.NewToolResultStructured(errResp, errResp.Error)
+			out := mcp.NewToolResultStructured(errResp, errResp.Message)
 			out.IsError = true
 			return out, nil
 		}
 		res, err := h(ctx, req, args)
 		if err != nil {
 			errResp := toErrorResponse(err)
-			out := mcp.NewToolResultStructured(errResp, errResp.Error)
+			out := mcp.NewToolResultStructured(errResp, errResp.Message)
 			out.IsError = true
 			return out, nil
 		}
@@ -53,9 +54,13 @@ func setupServer(root string) *server.MCPServer {
 	s := server.NewMCPServer("fs-mcp-go", "0.1.0")
 
 	sessions := map[string]*SessionState{
-		"default": {Root: root},
+		"default": NewSessionState("default", root),
 	}
 	var mu sync.RWMutex
+	
+	// Optional: Use SafeSessionManager for enhanced session management
+	// sessionManager := NewSafeSessionManager(DefaultSessionConfig())
+	// sessionManager.CreateSession("default", root)
 
 	readOpts := []mcp.ToolOption{
 		mcp.WithDescription("Read a file up to a byte limit."),
@@ -266,5 +271,94 @@ func setupServer(root string) *server.MCPServer {
 	pendingTool := mcp.NewTool("pendingdebug", pendingOpts...)
 	s.AddTool(pendingTool, wrapStructuredHandler(handlePendingDebug()))
 
+	// Multimodal tools
+	multimodalOpts := []mcp.ToolOption{
+		mcp.WithDescription("Read and analyze multimodal files (images, PDFs, notebooks)"),
+		mcp.WithString("path", mcp.Required(), mcp.Description("File path to analyze")),
+		mcp.WithString("options", mcp.Description("Processing options (JSON string)")),
+	}
+	if !*compatFlag {
+		multimodalOpts = append(multimodalOpts, mcp.WithOutputSchema[MultimodalReadResult]())
+	}
+	multimodalTool := mcp.NewTool("multimodal_read", multimodalOpts...)
+	if *compatFlag {
+		s.AddTool(multimodalTool, wrapTextHandler(handleMultimodalRead(sessions, &mu), formatMultimodalReadResult))
+	} else {
+		s.AddTool(multimodalTool, wrapStructuredHandler(handleMultimodalRead(sessions, &mu)))
+	}
+
+	// Notebook edit tool
+	notebookEditOpts := []mcp.ToolOption{
+		mcp.WithDescription("Edit Jupyter notebook cells with insertion, modification, and deletion capabilities"),
+	}
+	if !*compatFlag {
+		notebookEditOpts = append(notebookEditOpts, mcp.WithOutputSchema[NotebookEditResult]())
+	}
+	notebookEditTool := mcp.NewTool("notebook_edit", notebookEditOpts...)
+	if *compatFlag {
+		s.AddTool(notebookEditTool, wrapTextHandler(handleNotebookEditTool(sessions, &mu), formatNotebookEditResult))
+	} else {
+		s.AddTool(notebookEditTool, wrapStructuredHandler(handleNotebookEditTool(sessions, &mu)))
+	}
+
 	return s
+}
+
+// handleNotebookEditTool handles notebook cell editing operations
+func handleNotebookEditTool(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.StructuredToolHandlerFunc[NotebookEditArgs, NotebookEditResult] {
+	return func(ctx context.Context, req mcp.CallToolRequest, args NotebookEditArgs) (NotebookEditResult, error) {
+		state, err := getSessionState(ctx, sessions, mu)
+		if err != nil {
+			return NotebookEditResult{}, err
+		}
+		root := state.Root
+		
+		dprintf("%s -> notebook_edit path=%q index=%d", sessionContext(ctx), args.Path, args.CellIndex)
+		
+		// Validate required arguments
+		if args.Path == "" {
+			errResp := NewValidationError("path", "path is required", []string{`"path": "/path/to/notebook.ipynb"`})
+			errResp.Operation = "notebook_edit"
+			return NotebookEditResult{}, errResp
+		}
+		
+		// Resolve file path
+		full, err := safeJoinResolveFinal(root, args.Path)
+		if err != nil {
+			dprintf("notebook_edit error: %v", err)
+			return NotebookEditResult{}, WrapError(err, "notebook_edit", args.Path)
+		}
+		
+		// Check if file exists and is a notebook
+		if !strings.HasSuffix(strings.ToLower(full), ".ipynb") {
+			return NotebookEditResult{}, fmt.Errorf("file %s is not a Jupyter notebook (.ipynb)", args.Path)
+		}
+		
+		// Perform the edit operation
+		result, err := handleNotebookEdit(full, args)
+		if err != nil {
+			dprintf("notebook_edit processing error: %v", err)
+			return NotebookEditResult{}, WrapError(err, "notebook_edit", args.Path)
+		}
+		
+		dprintf("<- notebook_edit ok action=%s index=%d", result.Action, result.CellIndex)
+		return *result, nil
+	}
+}
+
+// formatNotebookEditResult formats the notebook edit result for text output
+func formatNotebookEditResult(r NotebookEditResult) string {
+	status := "failed"
+	if r.Success {
+		status = "success"
+	}
+	
+	result := fmt.Sprintf("path=%s action=%s index=%d status=%s", 
+		r.Path, r.Action, r.CellIndex, status)
+	
+	if r.Message != "" {
+		result += fmt.Sprintf(" message=%s", r.Message)
+	}
+	
+	return result
 }

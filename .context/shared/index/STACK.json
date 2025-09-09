@@ -1,0 +1,17 @@
+{
+  "modules": [
+    {
+      "id": "filesystem",
+      "path": "services/filesystem", 
+      "language": "go",
+      "type": "mcp-server"
+    },
+    {
+      "id": "stochastic-clarity", 
+      "path": "services/stochastic-clarity",
+      "language": "go", 
+      "type": "mcp-server"
+    }
+  ],
+  "schema": 1
+}

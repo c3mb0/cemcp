@@ -100,12 +100,25 @@ func handleWrite(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.Struct
 			if errors.Is(preErr, os.ErrNotExist) {
 				created = true
 			}
+			
+			// Acquire file handle resource for append operation
+			if err := globalFileHandlePool.Acquire(); err != nil {
+				dprintf("warning: file handle pool exhausted for append, proceeding without pooling")
+			} else {
+				defer globalFileHandlePool.Release()
+			}
+			
 			f, err := os.OpenFile(full, os.O_CREATE|os.O_WRONLY|os.O_APPEND, mode)
 			if err != nil {
 				dprintf("fs_write error: %v", err)
 				return res, err
 			}
-			defer f.Close()
+			defer func() {
+				if closeErr := f.Close(); closeErr != nil {
+					dprintf("warning: failed to close append file %s: %v", full, closeErr)
+				}
+			}()
+			
 			n, err := f.Write(data)
 			if err != nil {
 				dprintf("fs_write error: %v", err)
@@ -119,13 +132,29 @@ func handleWrite(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.Struct
 			}
 			var old []byte
 			if preErr == nil {
+				// Reserve memory for reading existing file content
+				if fi, statErr := os.Stat(full); statErr == nil {
+					if err := reserveMemory(fi.Size()); err != nil {
+						return res, fmt.Errorf("insufficient memory to read existing file for prepend: %w", err)
+					}
+					defer releaseMemory(fi.Size())
+				}
+				
 				old, err = os.ReadFile(full)
 				if err != nil {
-					return res, err
+					return res, fmt.Errorf("failed to read existing file for prepend: %w", err)
 				}
 			} else if errors.Is(preErr, os.ErrNotExist) {
 				created = true
 			}
+			
+			// Reserve memory for combined content
+			combinedSize := int64(len(data) + len(old))
+			if err := reserveMemory(combinedSize); err != nil {
+				return res, fmt.Errorf("insufficient memory for prepend operation: %w", err)
+			}
+			defer releaseMemory(combinedSize)
+			
 			buf := append([]byte{}, data...)
 			buf = append(buf, old...)
 			if err := atomicWrite(full, buf, mode); err != nil {
@@ -142,10 +171,17 @@ func handleWrite(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.Struct
 			if !preFi.Mode().IsRegular() {
 				return res, fmt.Errorf("replace_range target not a regular file: %s", args.Path)
 			}
+			
+			// Reserve memory for reading existing file
+			if err := reserveMemory(preFi.Size()); err != nil {
+				return res, fmt.Errorf("insufficient memory to read file for range replacement: %w", err)
+			}
+			defer releaseMemory(preFi.Size())
+			
 			old, err := os.ReadFile(full)
 			if err != nil {
 				dprintf("fs_write error: %v", err)
-				return res, err
+				return res, fmt.Errorf("failed to read file for range replacement: %w", err)
 			}
 			if args.Start == nil || args.End == nil {
 				return res, errors.New("start and end required for replace_range")
@@ -154,6 +190,14 @@ func handleWrite(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.Struct
 			if s < 0 || e < s || e > len(old) {
 				return res, fmt.Errorf("invalid range [%d,%d)", s, e)
 			}
+			
+			// Reserve memory for the new combined content
+			newSize := int64(len(old[:s]) + len(data) + len(old[e:]))
+			if err := reserveMemory(newSize); err != nil {
+				return res, fmt.Errorf("insufficient memory for range replacement result: %w", err)
+			}
+			defer releaseMemory(newSize)
+			
 			buf := append([]byte{}, old[:s]...)
 			buf = append(buf, data...)
 			buf = append(buf, old[e:]...)

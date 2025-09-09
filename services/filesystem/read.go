@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
-	"io"
 	"os"
 	"sync"
 	"time"
@@ -26,63 +24,58 @@ func handleRead(sessions map[string]*SessionState, mu *sync.RWMutex) mcp.Structu
 		start := time.Now()
 		dprintf("%s -> fs_read path=%q max_bytes=%d", sessionContext(ctx), args.Path, args.MaxBytes)
 		var res ReadResult
+		
+		// Validate required arguments
+		if args.Path == "" {
+			errResp := NewValidationError("path", "path is required", []string{`"path": "/path/to/file.txt"`})
+			errResp.Operation = "read"
+			return res, errResp
+		}
+		
 		full, err := safeJoinResolveFinal(root, args.Path)
 		if err != nil {
 			dprintf("fs_read error: %v", err)
-			return res, err
+			return res, WrapError(err, "read", args.Path)
 		}
 		fi, err := os.Stat(full)
 		if err != nil {
 			dprintf("fs_read stat error: %v", err)
-			return res, err
+			return res, WrapError(err, "read", args.Path)
 		}
 		limit := args.MaxBytes
 		if limit <= 0 {
 			limit = defaultReadMaxBytes
 		}
-		f, err := os.Open(full)
+		
+		// Use single file handle for both content reading and hash computation
+		content, sha, err := readFileWithHash(full, int64(limit), fi.Size())
 		if err != nil {
-			dprintf("fs_read open error: %v", err)
-			return res, err
+			dprintf("fs_read error: %v", err)
+			return res, WrapError(err, "read", args.Path)
 		}
-		defer f.Close()
-		r := io.LimitReader(f, int64(limit))
-		buf, err := io.ReadAll(r)
-		if err != nil {
-			dprintf("fs_read read error: %v", err)
-			return res, err
-		}
-		trunc := fi.Size() > int64(len(buf))
+		
+		trunc := fi.Size() > int64(len(content))
 
-		sha := ""
-		if fi.Size() <= maxHashBytes {
-			hf, err := os.Open(full)
-			if err == nil {
-				h := sha256.New()
-				if _, err := io.Copy(h, hf); err == nil {
-					sha = fmt.Sprintf("%x", h.Sum(nil))
-				}
-				hf.Close()
-			}
-		} else {
-			dprintf("fs_read: skip sha256 (size %d > cap %d)", fi.Size(), maxHashBytes)
-		}
-
-		content := string(buf)
+		contentStr := string(content)
+		
+		// Detect MIME type once and reuse the result
+		mimeType := detectMIME(full, content)
+		formattedMarkdown := formatAsFencedMarkdown(contentStr, mimeType, full)
 
 		res = ReadResult{
 			Path:      args.Path,
 			Size:      fi.Size(),
-			MIMEType:  detectMIME(full, buf),
+			MIMEType:  mimeType,
 			SHA256:    sha,
-			Content:   content,
+			Content:   contentStr,
 			Truncated: trunc,
+			FormattedMarkdown: formattedMarkdown,
 			MetaFields: MetaFields{
 				Mode:       fmt.Sprintf("%#o", fi.Mode()&os.ModePerm),
 				ModifiedAt: fi.ModTime().UTC().Format(time.RFC3339),
 			},
 		}
-		dprintf("<- fs_read ok size=%d truncated=%v dur=%s", len(buf), trunc, time.Since(start))
+		dprintf("<- fs_read ok size=%d truncated=%v dur=%s", len(content), trunc, time.Since(start))
 		return res, nil
 	}
 }

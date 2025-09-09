@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/c3mb0/cemcp/pkg/stochastic"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -145,6 +146,7 @@ type ServerConfig struct {
 var defaultConfig = ServerConfig{MaxThoughtsPerSession: 100}
 
 type SessionState struct {
+	mu                sync.RWMutex
 	sessionID         string
 	config            ServerConfig
 	thoughts          []ThoughtData
@@ -160,6 +162,9 @@ func NewSessionState(id string, cfg ServerConfig) *SessionState {
 }
 
 func (s *SessionState) RegisterBranch(id string, from *int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	if existing, ok := s.branches[id]; ok {
 		switch {
 		case existing == nil && from != nil:
@@ -180,7 +185,8 @@ func (s *SessionState) RegisterBranch(id string, from *int) error {
 	return nil
 }
 
-func (s *SessionState) SummarizeThoughts(n int) string {
+// summarizeThoughtsUnlocked should only be called when mutex is already held
+func (s *SessionState) summarizeThoughtsUnlocked(n int) string {
 	if n <= 0 || len(s.thoughts) == 0 {
 		return ""
 	}
@@ -198,6 +204,9 @@ func (s *SessionState) SummarizeThoughts(n int) string {
 }
 
 func (s *SessionState) AddThought(t ThoughtData) (bool, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	if len(s.thoughts) >= s.config.MaxThoughtsPerSession {
 		return false, ""
 	}
@@ -205,17 +214,31 @@ func (s *SessionState) AddThought(t ThoughtData) (bool, string) {
 	var summary string
 	threshold := int(float64(s.config.MaxThoughtsPerSession) * 0.8)
 	if len(s.thoughts) >= threshold {
-		summary = s.SummarizeThoughts(len(s.thoughts) / 2)
+		summary = s.summarizeThoughtsUnlocked(len(s.thoughts) / 2)
 	}
 	return true, summary
 }
 
-func (s *SessionState) GetThoughts() []ThoughtData { return s.thoughts }
+func (s *SessionState) GetThoughts() []ThoughtData {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	// Return a copy to prevent external modification
+	thoughts := make([]ThoughtData, len(s.thoughts))
+	copy(thoughts, s.thoughts)
+	return thoughts
+}
 func (s *SessionState) GetRemainingThoughts() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
 	return s.config.MaxThoughtsPerSession - len(s.thoughts)
 }
 
 func (s *SessionState) RetractThought() (*ThoughtData, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	n := len(s.thoughts)
 	if n == 0 {
 		return nil, false
@@ -225,16 +248,48 @@ func (s *SessionState) RetractThought() (*ThoughtData, bool) {
 	return &t, true
 }
 
-func (s *SessionState) AddMentalModel(m MentalModelData)   { s.mentalModels = append(s.mentalModels, m) }
-func (s *SessionState) GetMentalModels() []MentalModelData { return s.mentalModels }
+func (s *SessionState) AddMentalModel(m MentalModelData) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.mentalModels = append(s.mentalModels, m)
+}
+func (s *SessionState) GetMentalModels() []MentalModelData {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	// Return a copy to prevent external modification
+	models := make([]MentalModelData, len(s.mentalModels))
+	copy(models, s.mentalModels)
+	return models
+}
 
 func (s *SessionState) AddDebuggingSession(d DebuggingApproachData) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	s.debuggingSessions = append(s.debuggingSessions, d)
 }
-func (s *SessionState) GetDebuggingSessions() []DebuggingApproachData { return s.debuggingSessions }
+func (s *SessionState) GetDebuggingSessions() []DebuggingApproachData {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	// Return a copy to prevent external modification
+	sessions := make([]DebuggingApproachData, len(s.debuggingSessions))
+	copy(sessions, s.debuggingSessions)
+	return sessions
+}
 
-func (s *SessionState) AddGoal(g Goal) { s.goals = append(s.goals, g) }
+func (s *SessionState) AddGoal(g Goal) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.goals = append(s.goals, g)
+}
 func (s *SessionState) UpdateGoal(index int, completed *bool, notes *string) (*Goal, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	if index < 0 || index >= len(s.goals) {
 		return nil, false
 	}
@@ -246,8 +301,19 @@ func (s *SessionState) UpdateGoal(index int, completed *bool, notes *string) (*G
 	}
 	return &s.goals[index], true
 }
-func (s *SessionState) GetGoals() []Goal { return s.goals }
+func (s *SessionState) GetGoals() []Goal {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	// Return a copy to prevent external modification
+	goals := make([]Goal, len(s.goals))
+	copy(goals, s.goals)
+	return goals
+}
 func (s *SessionState) GetOutstandingGoals() []Goal {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
 	out := make([]Goal, 0)
 	for _, g := range s.goals {
 		if !g.Completed {
@@ -260,6 +326,9 @@ func (s *SessionState) GetOutstandingGoals() []Goal {
 func (s *SessionState) SessionID() string { return s.sessionID }
 
 func (s *SessionState) UpdateThought(num int, text string) (*ThoughtData, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	for i := range s.thoughts {
 		if s.thoughts[i].ThoughtNumber == num {
 			s.thoughts[i].Thought = text
@@ -270,6 +339,9 @@ func (s *SessionState) UpdateThought(num int, text string) (*ThoughtData, bool) 
 }
 
 func (s *SessionState) TrimThoughts(keepLast int) (removed, remaining int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	if keepLast < 0 {
 		keepLast = 0
 	}
@@ -283,6 +355,9 @@ func (s *SessionState) TrimThoughts(keepLast int) (removed, remaining int) {
 }
 
 func (s *SessionState) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	s.thoughts = nil
 	s.mentalModels = nil
 	s.debuggingSessions = nil
@@ -426,7 +501,10 @@ func registerUpdateThought(srv *server.MCPServer, state *SessionState) {
 		}
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -435,7 +513,10 @@ func registerUpdateThought(srv *server.MCPServer, state *SessionState) {
 		updated, ok := state.UpdateThought(args.ThoughtNumber, args.Thought)
 		if !ok {
 			errResp := map[string]any{"error": fmt.Sprintf("thought %d not found", args.ThoughtNumber), "status": "not_found"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -453,7 +534,10 @@ func registerUpdateThought(srv *server.MCPServer, state *SessionState) {
 				"outstandingGoals": state.GetOutstandingGoals(),
 			},
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -468,7 +552,10 @@ func registerRetractThought(srv *server.MCPServer, state *SessionState) {
 		t, ok := state.RetractThought()
 		if !ok {
 			errResp := map[string]any{"error": "no thoughts to retract", "status": "empty"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -480,7 +567,10 @@ func registerRetractThought(srv *server.MCPServer, state *SessionState) {
 			"remainingThoughts": state.GetRemainingThoughts(),
 			"status":            "success",
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -498,7 +588,10 @@ func registerGetBranch(srv *server.MCPServer, state *SessionState) {
 		}
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -523,7 +616,10 @@ func registerGetBranch(srv *server.MCPServer, state *SessionState) {
 			"thoughts":    seq,
 			"mergePoints": mergePoints,
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -661,7 +757,10 @@ func registerAddGoal(srv *server.MCPServer, state *SessionState) {
 		}
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -678,7 +777,10 @@ func registerAddGoal(srv *server.MCPServer, state *SessionState) {
 				"outstandingGoals": state.GetOutstandingGoals(),
 			},
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -700,7 +802,10 @@ func registerUpdateGoal(srv *server.MCPServer, state *SessionState) {
 		}
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -709,7 +814,10 @@ func registerUpdateGoal(srv *server.MCPServer, state *SessionState) {
 		g, ok := state.UpdateGoal(args.Index, args.Completed, args.Notes)
 		if !ok {
 			errResp := map[string]any{"error": "goal not found", "status": "not_found"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -724,7 +832,10 @@ func registerUpdateGoal(srv *server.MCPServer, state *SessionState) {
 				"outstandingGoals": state.GetOutstandingGoals(),
 			},
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -788,7 +899,10 @@ func registerGetMentalModels(srv *server.MCPServer, state *SessionState) {
 		}
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -814,7 +928,10 @@ func registerGetMentalModels(srv *server.MCPServer, state *SessionState) {
 			"limit":        lim,
 			"mentalModels": items,
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -834,7 +951,10 @@ func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
 		}
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -860,7 +980,10 @@ func registerGetDebuggingSessions(srv *server.MCPServer, state *SessionState) {
 			"limit":             lim,
 			"debuggingSessions": items,
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -887,7 +1010,10 @@ func registerSessionContext(srv *server.MCPServer, state *SessionState) {
 			"totalGoals":              len(state.GetGoals()),
 			"outstandingGoals":        state.GetOutstandingGoals(),
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -907,13 +1033,16 @@ func registerSearchContext(srv *server.MCPServer, state *SessionState) {
 		}
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
 		}
 
-		match := func(s string) bool { return false }
+		var match func(string) bool
 		if re, err := regexp.Compile(args.Query); err == nil {
 			match = func(s string) bool { return re.MatchString(s) }
 		} else {
@@ -980,7 +1109,10 @@ func registerSearchContext(srv *server.MCPServer, state *SessionState) {
 			"results":    items,
 			"nextOffset": nextOffset,
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -1034,7 +1166,10 @@ func registerStochasticClarityExamples(srv *server.MCPServer) {
 				},
 			},
 		}
-		b, _ := json.MarshalIndent(examples, "", "  ")
+		b, marshalErr := json.MarshalIndent(examples, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize examples", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -1051,7 +1186,10 @@ func registerResetSession(srv *server.MCPServer, state *SessionState) {
 			"status":            "reset",
 			"remainingThoughts": state.GetRemainingThoughts(),
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }
@@ -1069,7 +1207,10 @@ func registerTrimSession(srv *server.MCPServer, state *SessionState) {
 		}
 		if err := req.BindArguments(&args); err != nil {
 			errResp := map[string]any{"error": err.Error(), "status": "failed"}
-			b, _ := json.MarshalIndent(errResp, "", "  ")
+			b, marshalErr := json.MarshalIndent(errResp, "", "  ")
+			if marshalErr != nil {
+				b = []byte(fmt.Sprintf(`{"error": "%s", "status": "failed"}`, "marshal error"))
+			}
 			out := mcp.NewToolResultText(string(b))
 			out.IsError = true
 			return out, nil
@@ -1080,7 +1221,10 @@ func registerTrimSession(srv *server.MCPServer, state *SessionState) {
 			"removed":   removed,
 			"remaining": remaining,
 		}
-		b, _ := json.MarshalIndent(res, "", "  ")
+		b, marshalErr := json.MarshalIndent(res, "", "  ")
+		if marshalErr != nil {
+			b = []byte(`{"error": "failed to serialize response", "status": "failed"}`)
+		}
 		return mcp.NewToolResultText(string(b)), nil
 	})
 }

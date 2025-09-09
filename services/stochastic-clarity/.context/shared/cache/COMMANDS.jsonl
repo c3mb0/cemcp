@@ -1,0 +1,2 @@
+{"command":"go test ./...","result":"pass","files":["stochastic_test.go"],"timestamp":"2025-09-08"}
+{"command":"go build ./...","result":"partial","error":"CGO dependencies","timestamp":"2025-09-08"}

@@ -12,6 +12,12 @@ import (
 func main() {
 	flag.Parse()
 	initDebug()
+	
+	// Initialize resource management systems
+	InitializeResourceLimits()
+	InitializeTempFileManager()
+	defer StopTempFileManager()
+	
 	root, err := getRoot()
 	if err != nil {
 		panic(err)

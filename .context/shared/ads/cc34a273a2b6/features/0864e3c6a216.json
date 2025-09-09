@@ -1,0 +1,19 @@
+{
+  "cap_rule": "none",
+  "cell_id": "0864e3c6a216",
+  "class": "feature", 
+  "fence_mode": "manual",
+  "feature": "resource_management",
+  "footprint_sha": "2b7f94e35c89",
+  "goal": "be591eb9c4d5",
+  "hotspot_avoid_sha": "",
+  "impl_plan_sha": "a4b8d1f67e23",
+  "mincut_sha": "",
+  "owner": "cc34a273a2b6",
+  "plan_sha": "a4b8d1f67e23",
+  "qed_sha": "740a7493040d",
+  "requires_axioms": ["resource_cleanup", "error_safety"],
+  "rid": "cc34a273a2b6",
+  "signature_stub": true,
+  "status": "implemented"
+}

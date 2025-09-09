@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "filesystem",
+      "args": ["--root", "/Users/cem/cemcp"],
+      "env": {}
+    },
+    "stochastic-clarity": {
+      "command": "stochastic-clarity",
+      "args": [],
+      "env": {}
+    }
+  }
+}

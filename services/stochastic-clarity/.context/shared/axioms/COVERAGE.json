@@ -1,0 +1,13 @@
+{
+  "modules": {
+    "stochastic-clarity": {
+      "satisfied_axioms": ["test_coverage", "build_success"],
+      "total_coverage": 1.0
+    },
+    "filesystem": {
+      "satisfied_axioms": [],
+      "total_coverage": 0.0
+    }
+  },
+  "schema": 1
+}

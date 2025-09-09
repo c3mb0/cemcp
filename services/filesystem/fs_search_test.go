@@ -86,8 +86,8 @@ func TestSearchStartPathAndOutsideRoot(t *testing.T) {
 func TestSearchSymlinkAndErrorIgnored(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "target.txt"), []byte("hi"), 0o644)
-	os.Symlink(filepath.Join(root, "target.txt"), filepath.Join(root, "link.txt"))
-	os.Mkdir(filepath.Join(root, "blocked"), 0o000)
+	_ = os.Symlink(filepath.Join(root, "target.txt"), filepath.Join(root, "link.txt"))
+	_ = os.Mkdir(filepath.Join(root, "blocked"), 0o000)
 	ctx, sessions, mu := testSession(root)
 	search := handleSearch(sessions, mu)
 	_, err := search(ctx, mcp.CallToolRequest{}, SearchArgs{Pattern: "hi"})

@@ -1,0 +1,4 @@
+[
+  {"allow": {"paths": ["services/filesystem"], "symbols": ["ReadRequest", "Session"]}, "module": "filesystem"},
+  {"allow": {"paths": ["services/stochastic-clarity"], "symbols": ["ValidationError"]}, "module": "stochastic-clarity"}
+]

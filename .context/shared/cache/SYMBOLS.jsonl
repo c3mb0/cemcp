@@ -1,0 +1,10 @@
+{"module":"filesystem","symbol":"Server","type":"struct","path":"/Users/cem/cemcp/services/filesystem/server.go"}
+{"module":"filesystem","symbol":"Session","type":"struct","path":"/Users/cem/cemcp/services/filesystem/session.go"}
+{"module":"filesystem","symbol":"FileRequest","type":"struct","path":"/Users/cem/cemcp/services/filesystem/types.go"}
+{"module":"filesystem","symbol":"ListRequest","type":"struct","path":"/Users/cem/cemcp/services/filesystem/types.go"}
+{"module":"filesystem","symbol":"SearchRequest","type":"struct","path":"/Users/cem/cemcp/services/filesystem/types.go"}
+{"module":"filesystem","symbol":"EditRequest","type":"struct","path":"/Users/cem/cemcp/services/filesystem/types.go"}
+{"module":"filesystem","symbol":"WriteRequest","type":"struct","path":"/Users/cem/cemcp/services/filesystem/types.go"}
+{"module":"stochastic-clarity","symbol":"Server","type":"struct","path":"/Users/cem/cemcp/services/stochastic-clarity/server.go"}
+{"module":"stochastic-clarity","symbol":"StochasticRequest","type":"struct","path":"/Users/cem/cemcp/services/stochastic-clarity/stochastic.go"}
+{"module":"stochastic-clarity","symbol":"StochasticResponse","type":"struct","path":"/Users/cem/cemcp/services/stochastic-clarity/stochastic.go"}

@@ -1,0 +1,15 @@
+{
+  "modules": [
+    {
+      "id": "filesystem",
+      "path": "services/filesystem",
+      "type": "go_service"
+    },
+    {
+      "id": "stochastic-clarity",
+      "path": "services/stochastic-clarity",
+      "type": "go_service"
+    }
+  ],
+  "schema": 1
+}

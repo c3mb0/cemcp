@@ -17,7 +17,11 @@ func readWindow(path string, offset, max int) ([]byte, int64, bool, error) {
 	if err != nil {
 		return nil, 0, false, err
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			dprintf("warning: failed to close file %s: %v", path, closeErr)
+		}
+	}()
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, 0, false, err

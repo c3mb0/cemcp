@@ -1,0 +1,2 @@
+{"file":"services/filesystem/main.go","error":"CGO dependencies required","type":"build_error"}
+{"file":"services/filesystem/types.go","error":"Tesseract/Leptonica not found","type":"dependency_error"}

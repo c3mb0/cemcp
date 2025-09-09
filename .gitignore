@@ -14,3 +14,7 @@ coverage.out
 
 # Dependency directories
 vendor/
+**/.context/goal/
+**/.context/runs/
+**/.DS_Store
+**/DS_Store

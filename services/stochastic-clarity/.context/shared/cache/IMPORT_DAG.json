@@ -1,0 +1,11 @@
+{
+  "edges": [
+    ["filesystem", "stochastic-clarity"],
+    ["stochastic-clarity", "filesystem"]
+  ],
+  "modules": [
+    "filesystem",
+    "stochastic-clarity"
+  ],
+  "schema": 1
+}

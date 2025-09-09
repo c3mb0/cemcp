@@ -32,6 +32,7 @@ type ReadResult struct {
 	Content   string `json:"content" description:"File content (possibly truncated)"`
 	Truncated bool   `json:"truncated" description:"Whether content was truncated"`
 	MetaFields
+	FormattedMarkdown string `json:"formatted_markdown,omitempty" description:"File content formatted as fenced markdown block with language info"`
 }
 
 // PeekArgs defines parameters for peeking into files
@@ -193,4 +194,75 @@ type SwitchSessionResult struct {
 type ListSessionsResult struct {
 	Sessions []string `json:"sessions" description:"Available session ids"`
 	Active   string   `json:"active" description:"Currently active session id"`
+}
+
+// Multimodal Types
+
+// MultimodalReadArgs defines parameters for reading multimodal files
+type MultimodalReadArgs struct {
+	Path    string `json:"path" description:"File path to analyze"`
+	Options string `json:"options,omitempty" description:"Processing options (json string)"`
+}
+
+// ImageAnalysisResult contains image analysis results
+type ImageAnalysisResult struct {
+	Description string            `json:"description" description:"Visual description of the image"`
+	OCRText     string            `json:"ocr_text,omitempty" description:"Extracted text from image"`
+	Metadata    map[string]string `json:"metadata" description:"Image metadata (EXIF, dimensions, etc)"`
+	Width       int               `json:"width" description:"Image width in pixels"`
+	Height      int               `json:"height" description:"Image height in pixels"`
+	Format      string            `json:"format" description:"Image format (PNG, JPG, etc)"`
+	FileSize    int64             `json:"file_size" description:"File size in bytes"`
+}
+
+// PDFContentResult contains PDF processing results
+type PDFContentResult struct {
+	PageCount    int                    `json:"page_count" description:"Total number of pages"`
+	Metadata     map[string]string      `json:"metadata" description:"PDF metadata (title, author, etc)"`
+	Pages        []PDFPageContent       `json:"pages" description:"Content from each page"`
+	TextContent  string                 `json:"text_content" description:"Full text content"`
+	HasImages    bool                   `json:"has_images" description:"Whether PDF contains images"`
+	FileSize     int64                  `json:"file_size" description:"File size in bytes"`
+}
+
+// PDFPageContent contains content from a single PDF page
+type PDFPageContent struct {
+	PageNumber     int      `json:"page_number" description:"Page number (1-indexed)"`
+	Text           string   `json:"text" description:"Extracted text content"`
+	HasImages      bool     `json:"has_images" description:"Whether page contains images"`
+	VisualElements []string `json:"visual_elements" description:"Types of visual elements found"`
+	WordCount      int      `json:"word_count" description:"Number of words on the page"`
+}
+
+// NotebookCell represents a single Jupyter notebook cell
+type NotebookCell struct {
+	CellType   string                 `json:"cell_type" description:"Type: code or markdown"`
+	Source     []string               `json:"source" description:"Cell source content lines"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty" description:"Cell metadata"`
+	Outputs    []interface{}          `json:"outputs,omitempty" description:"Cell outputs (for code cells)"`
+	ExecutionCount *int                `json:"execution_count,omitempty" description:"Execution count (for code cells)"`
+}
+
+// NotebookContentResult contains Jupyter notebook parsing results
+type NotebookContentResult struct {
+	Cells         []NotebookCell         `json:"cells" description:"Notebook cells"`
+	Metadata      map[string]interface{} `json:"metadata" description:"Notebook metadata"`
+	KernelInfo    map[string]interface{} `json:"kernel_info,omitempty" description:"Kernel information"`
+	CellCount     int                    `json:"cell_count" description:"Total number of cells"`
+	CodeCells     int                    `json:"code_cells" description:"Number of code cells"`
+	MarkdownCells int                    `json:"markdown_cells" description:"Number of markdown cells"`
+	FileSize      int64                  `json:"file_size" description:"File size in bytes"`
+}
+
+// MultimodalReadResult contains results from multimodal file processing
+type MultimodalReadResult struct {
+	Path        string                 `json:"path" description:"Original file path"`
+	MIMEType    string                 `json:"mime_type" description:"Detected MIME type"`
+	FileType    string                 `json:"file_type" description:"File type category (image/pdf/notebook)"`
+	SHA256      string                 `json:"sha256" description:"SHA256 hash of file"`
+	Image       *ImageAnalysisResult   `json:"image,omitempty" description:"Image analysis results"`
+	PDF         *PDFContentResult      `json:"pdf,omitempty" description:"PDF content results"`
+	Notebook    *NotebookContentResult `json:"notebook,omitempty" description:"Notebook parsing results"`
+	ProcessingTime float64             `json:"processing_time" description:"Processing time in seconds"`
+	MetaFields
 }

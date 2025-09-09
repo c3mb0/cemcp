@@ -1,0 +1,50 @@
+					"type":  "debuggingSession",
+					"type":  "mentalModel",
+					"type":  "thought",
+					AcquisitionFunction: stringPtr(function),
+					ExplorationConstant: floatPtr(tc.constant),
+				t.Errorf("Expected no error for valid acquisition function '%s', got: %v", function, err)
+				t.Fatalf("Expected error for explorationConstant=%f", tc.constant)
+			match = func(s string) bool { return re.MatchString(s) }
+			match = func(s string) bool { return strings.Contains(s, args.Query) }
+		{-1.0, "negative exploration constant"},
+		{"bayesian", StochasticArgs{Algorithm: "bayesian", Bayesian: &BayesianParams{AcquisitionFunction: &acq}}, fmt.Sprintf("Optimized objective with %s acquisition", acq), "Consider more iterations or alternative acquisition functions"},
+		{"mcts", StochasticArgs{Algorithm: "mcts", MCTS: &MCTSParams{Simulations: &sims, ExplorationConstant: &ec}}, fmt.Sprintf("Explored %v paths with exploration constant %v", sims, ec), "Run additional simulations or adjust the exploration constant for deeper search"},
+		{0.0, "zero exploration constant"},
+		{10.1, "too high exploration constant"},
+		// Additional constraint: states should be reasonable (not too large)
+		// Additional constraints for reasonable values
+		constant    float64
+		match := func(s string) bool { return false }
+		return fmt.Sprintf("Explored %v paths with exploration constant %v", sims, c), "Run additional simulations or adjust the exploration constant for deeper search"
+		return fmt.Sprintf("Optimized objective with %s acquisition", acq), "Consider more iterations or alternative acquisition functions"
+		t.Run(algorithm, func(t *testing.T) {
+		t.Run(function, func(t *testing.T) {
+		t.Run(strategy, func(t *testing.T) {
+		t.Run(tc.description, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
+		var args DebuggingApproachData
+		var args MentalModelData
+		var args StochasticArgs
+		var args struct {
+		var args ThoughtData
+		var body struct {
+		var nextOffset *int
+	cleanup := func() {
+	for _, function := range functions {
+	functions := []string{"ucb", "ei", "pi"}
+	sort.Slice(branch, func(i, j int) bool { return branch[i].ThoughtNumber < branch[j].ThoughtNumber })
+	srv.AddTool(examplesTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(specTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	srv.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var body map[string]any
+	var body struct {
+	var summary string
+// Data types
+// Helper functions for creating test parameters
+// Helper functions for validation
+// Response types for structured output
+const (
+func (e StandardErrorResponse) Error() string {
+func (s *SessionState) AddDebuggingSession(d DebuggingApproachData) {

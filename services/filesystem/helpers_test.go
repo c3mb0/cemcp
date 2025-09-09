@@ -12,7 +12,7 @@ import (
 
 func TestInitDebugAndDprintf(t *testing.T) {
 	cwd, _ := os.Getwd()
-	defer os.Chdir(cwd)
+	defer func() { _ = os.Chdir(cwd) }()
 	tmp := t.TempDir()
 	if err := os.Chdir(tmp); err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 	}
 
 	// Error when creating the log file
-	os.Mkdir("log", 0o755)
+	_ = os.Mkdir("log", 0o755)
 	*debugFlag = "log"
 	initDebug()
 	if debugEnabled {
@@ -50,7 +50,7 @@ func TestInitDebugAndDprintf(t *testing.T) {
 
 func TestGetRoot(t *testing.T) {
 	cwd, _ := os.Getwd()
-	defer os.Chdir(cwd)
+	defer func() { _ = os.Chdir(cwd) }()
 	oldFlag := *rootDirFlag
 	defer func() { *rootDirFlag = oldFlag }()
 	oldEnv := os.Getenv("FS_ROOT")
@@ -114,7 +114,7 @@ func TestDetectMIMEAndIsTextExtra(t *testing.T) {
 func TestReadWindowVariants(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "a.txt")
-	os.WriteFile(p, []byte("0123456789"), 0o644)
+	_ = os.WriteFile(p, []byte("0123456789"), 0o644)
 	b, _, _, err := readWindow(p, -5, 2)
 	if err != nil || string(b) != "01" {
 		t.Fatalf("neg offset failed: %q %v", string(b), err)
@@ -140,7 +140,7 @@ func TestAtomicWrite(t *testing.T) {
 	}
 	// Rename should fail when the target is a directory
 	targetDir := filepath.Join(dir, "sub")
-	os.Mkdir(targetDir, 0o755)
+	_ = os.Mkdir(targetDir, 0o755)
 	if err := atomicWrite(targetDir, []byte("x"), 0o600); err == nil {
 		t.Fatalf("expected error writing to dir")
 	}
@@ -158,13 +158,13 @@ func (f fakeFileInfo) Sys() any           { return nil }
 func TestKindOf(t *testing.T) {
 	root := t.TempDir()
 	f := filepath.Join(root, "f")
-	os.WriteFile(f, []byte(""), 0o644)
+	_ = os.WriteFile(f, []byte(""), 0o644)
 	fi, _ := os.Lstat(f)
 	if k := kindOf(fi); k != "file" {
 		t.Fatalf("want file, got %s", k)
 	}
 	d := filepath.Join(root, "d")
-	os.Mkdir(d, 0o755)
+	_ = os.Mkdir(d, 0o755)
 	fi, _ = os.Lstat(d)
 	if k := kindOf(fi); k != "dir" {
 		t.Fatalf("want dir, got %s", k)
@@ -201,7 +201,7 @@ func TestAcquireLock(t *testing.T) {
 func TestHandleReadAndPeekVariants(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "b.bin")
-	os.WriteFile(p, []byte("hello"), 0o644)
+	_ = os.WriteFile(p, []byte("hello"), 0o644)
 	ctx, sessions, mu := testSession(root)
 	rd := handleRead(sessions, mu)
 	res, err := rd(ctx, mcp.CallToolRequest{}, ReadArgs{Path: "b.bin"})
@@ -229,13 +229,13 @@ func TestHandleWriteErrors(t *testing.T) {
 		t.Fatalf("expected strategy error")
 	}
 	// append to directory should error
-	os.Mkdir(filepath.Join(root, "adir"), 0o755)
+	_ = os.Mkdir(filepath.Join(root, "adir"), 0o755)
 	if _, err := wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "adir", Content: "x", Strategy: strategyAppend}); err == nil {
 		t.Fatalf("expected append dir error")
 	}
 
 	// prepare file for replace_range tests
-	os.WriteFile(filepath.Join(root, "r.txt"), []byte("abcd"), 0o644)
+	_ = os.WriteFile(filepath.Join(root, "r.txt"), []byte("abcd"), 0o644)
 	s, e := 3, 2 // invalid range (end < start)
 	if _, err := wr(ctx, mcp.CallToolRequest{}, WriteArgs{Path: "r.txt", Content: "x", Strategy: strategyReplaceRange, Start: &s, End: &e}); err == nil {
 		t.Fatalf("expected invalid range error")
@@ -249,7 +249,7 @@ func TestHandleWriteErrors(t *testing.T) {
 func TestHandleEditError(t *testing.T) {
 	root := t.TempDir()
 	p := filepath.Join(root, "e.txt")
-	os.WriteFile(p, []byte("data"), 0o644)
+	_ = os.WriteFile(p, []byte("data"), 0o644)
 	ctx, sessions, mu := testSession(root)
 	ed := handleEdit(sessions, mu)
 	if _, err := ed(ctx, mcp.CallToolRequest{}, EditArgs{Path: "e.txt", Pattern: "(", Replace: "x", Regex: true}); err == nil {
@@ -262,8 +262,8 @@ func TestHandleEditError(t *testing.T) {
 
 func TestHandleListVariants(t *testing.T) {
 	root := t.TempDir()
-	os.WriteFile(filepath.Join(root, "a.txt"), []byte(""), 0o644)
-	os.WriteFile(filepath.Join(root, "b.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(root, "a.txt"), []byte(""), 0o644)
+	_ = os.WriteFile(filepath.Join(root, "b.txt"), []byte(""), 0o644)
 	ctx, sessions, mu := testSession(root)
 	hl := handleList(sessions, mu)
 	res, err := hl(ctx, mcp.CallToolRequest{}, ListArgs{Path: ".", MaxEntries: 1})

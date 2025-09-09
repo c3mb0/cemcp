@@ -1,0 +1,6 @@
+{"command":"fs_read","usage":120,"performance":"excellent"}
+{"command":"fs_write","usage":85,"performance":"excellent"}
+{"command":"fs_search","usage":90,"performance":"optimized"}
+{"command":"fs_edit","usage":75,"performance":"robust"}
+{"command":"createsession","usage":30,"performance":"fast"}
+{"command":"debuggingapproach","usage":15,"performance":"comprehensive"}

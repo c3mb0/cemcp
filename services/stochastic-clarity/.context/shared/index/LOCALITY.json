@@ -1,0 +1,11 @@
+{
+  "anchors": [
+    "services/filesystem/main.go",
+    "services/stochastic-clarity/stochastic.go"
+  ],
+  "hotspots": [
+    "services/filesystem/session.go",
+    "services/filesystem/server.go"
+  ],
+  "schema": 1
+}

@@ -1,0 +1,34 @@
+{
+  "cuts": [
+    {
+      "allow": {
+        "paths": [
+          "services/filesystem/*.go",
+          "services/filesystem/go.mod",
+          "services/filesystem/go.sum"
+        ],
+        "symbols": [
+          "FileSystem",
+          "Session",
+          "SearchRequest",
+          "ReadRequest"
+        ]
+      },
+      "module": "filesystem"
+    },
+    {
+      "allow": {
+        "paths": [
+          "services/stochastic-clarity/*.go",
+          "services/stochastic-clarity/go.mod"
+        ],
+        "symbols": [
+          "StochasticService",
+          "Handler"
+        ]
+      },
+      "module": "stochastic-clarity"
+    }
+  ],
+  "schema": 1
+}
